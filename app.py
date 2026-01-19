@@ -12,84 +12,74 @@ from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 
 # ==========================================
-# 🎨 1. THEME & UI SETUP (نفس تصميم ملف HTML)
+# 🎨 1. THEME & UI SETUP
 # ==========================================
 st.set_page_config(page_title="Almaster Tech - Cannibalization Hunter", page_icon="🕵️", layout="wide")
 
-# حقن نفس الـ CSS والألوان والخطوط من ملفك
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap');
     
-    /* Global Reset */
     * { font-family: 'Cairo', sans-serif !important; }
     
-    /* Background similar to your file */
     .stApp {
         background: url('https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=2072&auto=format&fit=crop') no-repeat center center fixed;
         background-size: cover;
     }
     
-    /* Dark Overlay */
     .stApp::before {
         content: ""; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: rgba(1, 1, 114, 0.75); z-index: -1; pointer-events: none;
+        background: rgba(1, 1, 114, 0.85); z-index: -1; pointer-events: none;
     }
 
-    /* Glassmorphism Cards */
     .glass-card {
-        background: rgba(255, 255, 255, 0.96);
+        background: rgba(255, 255, 255, 0.95);
         border-radius: 16px;
-        padding: 30px;
-        box-shadow: 0 20px 40px rgba(0,0,0,0.4);
-        border: 1px solid rgba(255,255,255,0.5);
+        padding: 25px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.3);
         margin-bottom: 20px;
+        border: 1px solid rgba(255,255,255,0.2);
     }
 
-    /* Headers */
     h1, h2, h3 { color: #010172 !important; font-weight: 800 !important; }
+    p, label { color: #333 !important; font-weight: 600 !important; }
     
-    /* Custom Buttons */
+    /* Input Fields Styling (Fixing the White Box issue) */
+    .stTextInput > div > div > input {
+        background-color: #f0f2f6;
+        color: #333;
+        border-radius: 10px;
+        border: 1px solid #ccc;
+    }
+    .stTextArea > div > div > textarea {
+        background-color: #f0f2f6;
+        color: #333;
+        border-radius: 10px;
+    }
+
+    /* Buttons */
     .stButton>button {
         background: linear-gradient(135deg, #2F45FF, #010172);
         color: white; border: none; border-radius: 12px;
         height: 50px; font-weight: 700; width: 100%;
-        box-shadow: 0 10px 20px -5px rgba(1, 1, 114, 0.3);
         transition: 0.3s;
     }
     .stButton>button:hover {
         transform: translateY(-2px);
-        box-shadow: 0 15px 30px -5px rgba(1, 1, 114, 0.4);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.4);
         color: white;
     }
 
-    /* Metrics */
-    div[data-testid="stMetric"] {
-        background-color: #f8fafc;
-        padding: 15px;
-        border-radius: 10px;
-        border: 1px solid #e2e8f0;
-        text-align: center;
-    }
-    div[data-testid="stMetricLabel"] { color: #666; font-size: 14px; }
-    div[data-testid="stMetricValue"] { color: #2F45FF; font-weight: 800; font-size: 24px; }
-
-    /* Alert Boxes */
-    .stAlert { border-radius: 10px; }
-    
-    /* Logo Area */
-    .logo-text { font-size: 28px; font-weight: 800; color: white; text-align: center; margin-bottom: 20px; }
+    /* Logo */
+    .logo-text { font-size: 32px; font-weight: 800; color: white; text-align: center; margin-bottom: 10px; text-shadow: 0 2px 10px rgba(0,0,0,0.5); }
     .logo-text span { color: #4dabf7; }
 </style>
 """, unsafe_allow_html=True)
 
-# Header Section
-st.markdown("""
-<div class="logo-text">ALMASTER <span>TECH</span> <br><span style='font-size:16px; opacity:0.8'>GSC Cannibalization Hunter v8.0</span></div>
-""", unsafe_allow_html=True)
+st.markdown("""<div class="logo-text">ALMASTER <span>TECH</span></div>""", unsafe_allow_html=True)
 
 # ==========================================
-# ⚙️ 2. LOGIC CONFIGURATION (V8 Enterprise)
+# ⚙️ 2. LOGIC CONFIGURATION
 # ==========================================
 class Config:
     MIN_IMP_QUANTILE = 0.2
@@ -172,38 +162,35 @@ def generate_action_plan(severity, w_type, l_type, q_type, ctr_perf):
     return "✅ MONITOR"
 
 # ==========================================
-# 🔌 4. AUTHENTICATION & DATA FETCHING
+# 🔌 4. AUTHENTICATION
 # ==========================================
 def authenticate_gsc(uploaded_client_secret):
     SCOPES = ['https://www.googleapis.com/auth/webmasters.readonly']
     if uploaded_client_secret:
-        # For Streamlit Cloud: Create a temp file
+        # Save temp file
         with open("client_secret.json", "wb") as f:
             f.write(uploaded_client_secret.getbuffer())
         
         flow = InstalledAppFlow.from_client_secrets_file("client_secret.json", SCOPES)
-        # Use a fixed Redirect URI for Cloud usually, but for simple use:
-        flow.redirect_uri = "urn:ietf:wg:oauth:2.0:oob" 
+        flow.redirect_uri = "urn:ietf:wg:oauth:2.0:oob"
         
         auth_url, _ = flow.authorization_url(prompt='consent')
         
         st.markdown(f"""
-        <div class="glass-card" style="text-align:center">
-            <h3>🔐 مطلوب المصادقة</h3>
-            <p>1. اضغط على الرابط أدناه لتسجيل الدخول بحساب جوجل.</p>
-            <a href="{auth_url}" target="_blank" class="stButton" style="text-decoration:none; color:white; background:#010172; padding:10px 20px; border-radius:10px;">🔗 فتح رابط المصادقة</a>
-            <p style="margin-top:10px">2. انسخ الكود الذي سيظهر لك وضعه في الخانة بالأسفل.</p>
+        <div class="glass-card" style="text-align:center; padding:15px;">
+            <h4 style="margin:0 0 10px 0;">🔐 خطوة المصادقة (مطلوبة مرة واحدة)</h4>
+            <a href="{auth_url}" target="_blank" style="background:#2F45FF; color:white; padding:10px 20px; border-radius:50px; text-decoration:none; font-weight:bold;">1️⃣ اضغط هنا للحصول على الكود</a>
         </div>
         """, unsafe_allow_html=True)
         
-        auth_code = st.text_input("أدخل كود المصادقة هنا:")
+        auth_code = st.text_input("2️⃣ الصق كود المصادقة هنا واضغط Enter:", key="auth_code_input")
         
         if auth_code:
             try:
                 flow.fetch_token(code=auth_code)
                 return build('searchconsole', 'v1', credentials=flow.credentials)
             except Exception as e:
-                st.error(f"خطأ في المصادقة: {e}")
+                st.error(f"❌ كود خاطئ أو منتهي الصلاحية: {e}")
                 return None
     return None
 
@@ -266,8 +253,13 @@ def run_analysis(df, brand_names_input):
     return pd.DataFrame(report_data)
 
 # ==========================================
-# 🖥️ 5. APP LAYOUT
+# 🖥️ 5. APP LAYOUT & STATE MANAGEMENT
 # ==========================================
+
+# >> SOLUTION FOR THE BUTTON ISSUE: Session State <<
+if "audit_started" not in st.session_state:
+    st.session_state.audit_started = False
+
 col1, col2 = st.columns([1, 2])
 
 with col1:
@@ -280,55 +272,62 @@ with col1:
     days = st.slider("فترة التحليل (أيام)", 7, 90, 30)
     brands = st.text_area("أسماء البراند (للحماية)", "almaster, المستر, ماستر")
     
-    run_btn = st.button("🚀 بدء الفحص الشامل")
+    if st.button("🚀 بدء الفحص الشامل"):
+        st.session_state.audit_started = True
+
     st.markdown('</div>', unsafe_allow_html=True)
 
 with col2:
-    if run_btn and uploaded_secret:
-        service = authenticate_gsc(uploaded_secret)
-        
-        if service:
-            with st.spinner('⏳ جاري سحب البيانات من جوجل...'):
-                end_date = datetime.date.today()
-                start_date = end_date - datetime.timedelta(days=days)
-                req = {'startDate': start_date.isoformat(), 'endDate': end_date.isoformat(), 
-                       'dimensions': ['query', 'page'], 'rowLimit': 25000}
-                try:
-                    resp = service.searchanalytics().query(siteUrl=site_url, body=req).execute()
-                    rows = resp.get('rows', [])
-                except Exception as e:
-                    st.error(f"Error: {e}")
-                    rows = []
+    # Only show content if started OR if secret is uploaded
+    if st.session_state.audit_started:
+        if not uploaded_secret:
+            st.warning("⚠️ يرجى رفع ملف المصادقة (client_secret.json) من قائمة الإعدادات أولاً.")
+        else:
+            service = authenticate_gsc(uploaded_secret)
+            
+            if service:
+                with st.spinner('⏳ جاري سحب البيانات من جوجل...'):
+                    end_date = datetime.date.today()
+                    start_date = end_date - datetime.timedelta(days=days)
+                    req = {'startDate': start_date.isoformat(), 'endDate': end_date.isoformat(), 
+                           'dimensions': ['query', 'page'], 'rowLimit': 25000}
+                    try:
+                        resp = service.searchanalytics().query(siteUrl=site_url, body=req).execute()
+                        rows = resp.get('rows', [])
+                    except Exception as e:
+                        st.error(f"Error fetching data: {e}")
+                        rows = []
 
-            if rows:
-                df_raw = pd.DataFrame([{
-                    'query': r['keys'][0], 'page': r['keys'][1],
-                    'clicks': r['clicks'], 'impressions': r['impressions'],
-                    'ctr': r['ctr'], 'position': r['position']
-                } for r in rows])
-                
-                with st.spinner('🧠 جاري تحليل التنافس بالذكاء الاصطناعي (V8)...'):
-                    report = run_analysis(df_raw, [x.strip() for x in brands.split(',')])
-                
-                if not report.empty:
-                    report = report.sort_values(by=['Priority_Score'], ascending=False)
+                if rows:
+                    df_raw = pd.DataFrame([{
+                        'query': r['keys'][0], 'page': r['keys'][1],
+                        'clicks': r['clicks'], 'impressions': r['impressions'],
+                        'ctr': r['ctr'], 'position': r['position']
+                    } for r in rows])
                     
-                    # Top Metrics
-                    m1, m2, m3 = st.columns(3)
-                    m1.metric("إجمالي التضارب", len(report))
-                    m2.metric("حالات حرجة 🔥", len(report[report['Severity'] == "🔥 Critical"]))
-                    m3.metric("زيارات ضائعة", f"{report['Est_Traffic_Loss'].sum():,}")
+                    with st.spinner('🧠 جاري تحليل التنافس بالذكاء الاصطناعي (V8)...'):
+                        report = run_analysis(df_raw, [x.strip() for x in brands.split(',')])
                     
-                    st.markdown("### 📋 النتائج التفصيلية")
-                    st.dataframe(report.style.applymap(lambda x: 'color: red; font-weight: bold' if x == '🔥 Critical' else '', subset=['Severity']), use_container_width=True)
-                    
-                    csv = report.to_csv(index=False).encode('utf-8')
-                    st.download_button("📥 تحميل التقرير (Excel/CSV)", csv, "report.csv", "text/csv")
+                    if not report.empty:
+                        report = report.sort_values(by=['Priority_Score'], ascending=False)
+                        
+                        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+                        m1, m2, m3 = st.columns(3)
+                        m1.metric("إجمالي التضارب", len(report))
+                        m2.metric("حالات حرجة 🔥", len(report[report['Severity'] == "🔥 Critical"]))
+                        m3.metric("زيارات ضائعة", f"{report['Est_Traffic_Loss'].sum():,}")
+                        st.markdown('</div>', unsafe_allow_html=True)
+                        
+                        st.markdown("### 📋 النتائج التفصيلية")
+                        st.dataframe(report.style.applymap(lambda x: 'color: red; font-weight: bold' if x == '🔥 Critical' else '', subset=['Severity']), use_container_width=True)
+                        
+                        csv = report.to_csv(index=False).encode('utf-8')
+                        st.download_button("📥 تحميل التقرير (Excel/CSV)", csv, "report.csv", "text/csv")
+                    else:
+                        st.balloons()
+                        st.success("✅ موقعك نظيف! لا يوجد cannibalization.")
                 else:
-                    st.success("✅ موقعك نظيف! لا يوجد cannibalization.")
-            else:
-                st.warning("لا توجد بيانات.")
-    elif run_btn and not uploaded_secret:
-        st.warning("⚠️ يرجى رفع ملف client_secret.json أولاً")
+                    st.warning("⚠️ لا توجد بيانات في Google Search Console لهذا النطاق في الفترة المحددة.")
     else:
-        st.info("👈 ابدأ برفع ملف المصادقة واضغط على زر الفحص.")
+        # Welcome Screen
+        st.info("👈 املأ الإعدادات في القائمة الجانبية واضغط على 'بدء الفحص الشامل' للبدء.")
