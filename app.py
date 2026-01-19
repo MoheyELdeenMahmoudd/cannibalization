@@ -334,26 +334,31 @@ with st.sidebar:
 
 # Auth Flow
 if uploaded_file:
-    flow = InstalledAppFlow.from_client_secrets_file(uploaded_file, ['https://www.googleapis.com/auth/webmasters.readonly'])
+    # 1. حفظ الملف المرفوع مؤقتاً على السيرفر
+    with open("client_secret.json", "wb") as f:
+        f.write(uploaded_file.getbuffer())
+
+    # 2. تمرير "اسم الملف" (String) بدلاً من الكائن نفسه
+    flow = InstalledAppFlow.from_client_secrets_file("client_secret.json", ['https://www.googleapis.com/auth/webmasters.readonly'])
+    
     flow.redirect_uri = "urn:ietf:wg:oauth:2.0:oob"
     auth_url, _ = flow.authorization_url()
     
     if 'creds' not in st.session_state:
-        st.info("👋 مرحباً بك! يرجى المصادقة.")
-        st.markdown(f"""
-        <a href="{auth_url}" target="_blank" style="background:#3b82f6; color:white; padding:10px 20px; border-radius:10px; text-decoration:none; display:block; text-align:center;">
-        👉 1. اضغط هنا للحصول على كود جديد
-        </a>
-        """, unsafe_allow_html=True)
-        auth_code = st.text_input("2. الصق الكود هنا:", placeholder="4/1A...")
+        st.info("👋 يرجى المصادقة للبدء")
+        st.markdown(f"[**👉 اضغط هنا للحصول على كود المصادقة**]({auth_url})")
+        auth_code = st.text_input("أدخل الكود هنا:")
         
         if auth_code:
+            # نمرر الكائن uploaded_file للدالة (أو نعدلها لتقبل المسار، لكن الكود الحالي للدالة authenticate_gsc يتعامل معه)
+            # الأفضل هنا استخدام المسار الذي حفظناه أو تعديل المنطق قليلاً.
+            # لتبسيط الأمر وتفادي أخطاء أخرى، سنستخدم authenticate_gsc الموجودة في الكود القديم ونمرر لها الملف
             service = authenticate_gsc(auth_code, uploaded_file)
             if service:
                 st.session_state.creds = service
                 st.rerun()
             else:
-                st.error("❌ كود خاطئ أو منتهي الصلاحية! حاول مجدداً.")
+                st.error("كود خاطئ! حاول مجدداً برابط جديد.")
 
 # Main Dashboard
 if 'creds' in st.session_state:
@@ -427,3 +432,4 @@ if 'creds' in st.session_state:
 else:
     if not uploaded_file:
         st.info("⬅️ ابدأ برفع ملف المصادقة (client_secret.json) من القائمة الجانبية.")
+
