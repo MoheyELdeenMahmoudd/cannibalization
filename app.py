@@ -21,25 +21,22 @@ st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap');
     
-    /* Apply Font to everything */
     html, body, [class*="css"] { font-family: 'Cairo', sans-serif !important; }
     
-    /* Space Background */
     .stApp {
         background: linear-gradient(to bottom, #020024, #090979, #00d4ff);
         background-size: cover;
         background-attachment: fixed;
     }
 
-    /* RTL Handling - Text Only to avoid Sidebar Glitches */
+    /* RTL Handling */
     p, h1, h2, h3, h4, h5, h6, .stMarkdown, .stRadio, .stSelectbox label, .stTextInput label, .stTextArea label {
         direction: rtl; 
         text-align: right;
     }
     
-    /* Fix Sidebar Expansion Arrow Overlap */
-    .st-emotion-cache-16txtl3 { direction: ltr; } /* Container direction */
-    .st-emotion-cache-16txtl3 p { direction: rtl; } /* Text inside */
+    .st-emotion-cache-16txtl3 { direction: ltr; } 
+    .st-emotion-cache-16txtl3 p { direction: rtl; } 
 
     /* Metrics Cards */
     div[data-testid="stMetric"] {
@@ -62,8 +59,7 @@ st.markdown("""
     }
     .stButton>button:hover { transform: scale(1.02); box-shadow: 0 0 15px rgba(47, 69, 255, 0.5); color:white; }
 
-    /* Table Styling */
-    .stDataFrame { direction: ltr; } /* URLs need LTR */
+    .stDataFrame { direction: ltr; } 
 </style>
 """, unsafe_allow_html=True)
 
@@ -71,14 +67,19 @@ st.markdown("""
 st.markdown("""
 <div style="text-align: center; margin-bottom: 30px; background: rgba(0,0,0,0.3); padding: 20px; border-radius: 15px;">
     <h1 style="color:white; margin:0; text-shadow: 0 0 20px #2F45FF;">ALMASTER <span style="color:#00d4ff;">TECH</span></h1>
-    <p style="color:#cbd5e1; font-size:16px;">Enterprise SEO Cannibalization System v11.0</p>
+    <p style="color:#cbd5e1; font-size:16px;">Enterprise SEO Cannibalization System v12.0</p>
 </div>
 """, unsafe_allow_html=True)
 
 # ==========================================
-# ⚙️ 2. LOGIC CONFIGURATION
+# ⚙️ 2. LOGIC CONFIGURATION (Fixed Missing Constants)
 # ==========================================
 class Config:
+    # --- Missing Constants Added Here ---
+    SEVERITY_CRITICAL = 0.8
+    SEVERITY_HIGH = 0.5
+    SEVERITY_MEDIUM = 0.3
+    
     MIN_IMP_QUANTILE = 0.2
     MIN_IMP_ABSOLUTE = 10
     MAX_DEPTH_PENALTY = 6
@@ -92,7 +93,7 @@ class Config:
     INFO_TERMS = ['how', 'what', 'guide', 'tutorial', 'tips', 'why', 'review', 'vs', 'best', 'كيف', 'دليل', 'شرح', 'نصائح']
 
 # ==========================================
-# 🧠 3. ADVANCED LOGIC FUNCTIONS (Vectorized)
+# 🧠 3. ADVANCED LOGIC FUNCTIONS
 # ==========================================
 def identify_market_segment(url):
     try:
@@ -104,11 +105,9 @@ def identify_market_segment(url):
     except: return "Unknown"
 
 def detect_intents_vectorized(df):
-    # Vectorized String Operations (No .apply loop) -> Much Faster
     q_lower = df['query'].str.lower()
     url_lower = df['page_clean'].str.lower()
     
-    # Query Intent
     c_mask = q_lower.apply(lambda x: any(t in x for t in Config.COMM_TERMS))
     i_mask = q_lower.apply(lambda x: any(t in x for t in Config.INFO_TERMS))
     
@@ -118,14 +117,9 @@ def detect_intents_vectorized(df):
         default='Navigational/General'
     )
     
-    # Page Intent
     p_intent = pd.Series('General', index=df.index)
-    
-    # Check Info Patterns
     for term in Config.URL_PATTERNS['Informational']['terms']:
         p_intent[url_lower.str.contains(term, regex=False)] = 'Informational'
-        
-    # Check Commercial Patterns (Override info if mixed, usually stronger)
     for term in Config.URL_PATTERNS['Commercial']['terms']:
         p_intent[url_lower.str.contains(term, regex=False)] = 'Commercial'
         
@@ -133,17 +127,13 @@ def detect_intents_vectorized(df):
     return df
 
 def calculate_score_vectorized(df):
-    # Normalize per group
     max_imp = df.groupby('query_market')['impressions'].transform('max').replace(0, 1)
     max_click = df.groupby('query_market')['clicks'].transform('max').replace(0, 1)
     
     norm_imp = df['impressions'] / max_imp
     norm_click = df['clicks'] / max_click
-    
-    # Log Position Score
     pos_score = 10 / (np.log(df['position'] + 1) + 1)
     
-    # Depth Penalty
     depth = df['page_clean'].str.count('/').clip(upper=Config.MAX_DEPTH_PENALTY)
     depth_factor = 1 / (depth + 1)
     
@@ -155,15 +145,13 @@ def calculate_score_vectorized(df):
     return score
 
 # ==========================================
-# 🔌 4. DATA HANDLING (Pagination & Excel)
+# 🔌 4. DATA HANDLING
 # ==========================================
 @st.cache_resource
-def authenticate_gsc(auth_code, _uploaded_secret):
+def authenticate_gsc(auth_code):
+    # Note: We rely on the file being present as "client_secret.json"
     SCOPES = ['https://www.googleapis.com/auth/webmasters.readonly']
     try:
-        with open("client_secret.json", "wb") as f:
-            f.write(_uploaded_secret.getbuffer())
-        
         flow = InstalledAppFlow.from_client_secrets_file("client_secret.json", SCOPES)
         flow.redirect_uri = "urn:ietf:wg:oauth:2.0:oob"
         flow.fetch_token(code=auth_code)
@@ -178,7 +166,6 @@ def fetch_all_data(service, site_url, days):
     start_row = 0
     batch_size = 25000
     
-    # Real Progress Bar
     progress_bar = st.progress(0)
     status_text = st.empty()
     
@@ -195,8 +182,6 @@ def fetch_all_data(service, site_url, days):
             
             all_rows.extend(rows)
             start_row += len(rows)
-            
-            # Update Progress (Simulation as we don't know total)
             progress = min(start_row / 100000, 0.95) 
             progress_bar.progress(progress)
             
@@ -216,24 +201,17 @@ def to_excel(df):
         workbook = writer.book
         worksheet = writer.sheets['Analysis']
         
-        # Formats
         header_fmt = workbook.add_format({'bold': True, 'font_color': 'white', 'bg_color': '#0f172a', 'border': 1, 'align': 'center'})
-        critical_fmt = workbook.add_format({'bg_color': '#fee2e2', 'font_color': '#991b1b'}) # Red for Critical
+        critical_fmt = workbook.add_format({'bg_color': '#fee2e2', 'font_color': '#991b1b'})
         
-        # Apply Headers
         for col_num, value in enumerate(df.columns.values):
             worksheet.write(0, col_num, value, header_fmt)
         
-        # Apply Conditional Formatting for Severity
         sev_col_idx = df.columns.get_loc('Severity')
         worksheet.conditional_format(1, sev_col_idx, len(df), sev_col_idx, {
-            'type': 'text',
-            'criteria': 'containing',
-            'value': 'Critical',
-            'format': critical_fmt
+            'type': 'text', 'criteria': 'containing', 'value': 'Critical', 'format': critical_fmt
         })
-        
-        worksheet.set_column(0, 15, 20) # Width adjustment
+        worksheet.set_column(0, 15, 20)
     return output.getvalue()
 
 # ==========================================
@@ -244,14 +222,11 @@ def run_full_analysis(df_raw, brands):
     df = df_raw.copy()
     df.columns = [c.lower() for c in df.columns]
     
-    # Preprocessing
     df['page_clean'] = df['page'].astype(str).str.split('?').str[0].str.split('#').str[0].str.rstrip('/')
     df['market'] = df['page_clean'].apply(identify_market_segment)
     
-    # Vectorized Logic
     df = detect_intents_vectorized(df)
     
-    # Aggregation
     df['query_market'] = df['query'] + "_" + df['market']
     df['weighted_pos'] = df['position'] * df['impressions']
     
@@ -264,17 +239,12 @@ def run_full_analysis(df_raw, brands):
     grp['position'] = grp['weighted_pos'] / grp['impressions']
     grp['ctr'] = (grp['clicks'] / grp['impressions'].replace(0, 1)) * 100
     
-    # Threshold
     threshold = max(grp['impressions'].quantile(Config.MIN_IMP_QUANTILE), Config.MIN_IMP_ABSOLUTE)
     grp = grp[grp['impressions'] >= threshold].copy()
     
-    # Scoring
     grp['score'] = calculate_score_vectorized(grp)
     
-    # Conflict Detection Loop (Cannot be easily vectorized due to group logic)
     report = []
-    
-    # Filter only groups with > 1 page
     grp = grp.sort_values(['query_market', 'score'], ascending=[True, False])
     dupes = grp[grp.duplicated('query_market', keep=False)]
     
@@ -284,17 +254,15 @@ def run_full_analysis(df_raw, brands):
         top_loser = losers.iloc[0]
         
         overlap = top_loser['score'] / winner['score']
-        
-        # Severity
         is_brand = any(b in winner['query'] for b in brands)
         severity_score = overlap * (1.2 if is_brand else 1.0)
         
+        # --- FIXED: Use Config Constants ---
         severity = "Low"
         if severity_score > Config.SEVERITY_CRITICAL: severity = "Critical"
         elif severity_score > Config.SEVERITY_HIGH: severity = "High"
         elif severity_score > Config.SEVERITY_MEDIUM: severity = "Medium"
         
-        # Action Plan
         action = "Monitor"
         if winner['p_intent'] == top_loser['p_intent'] and severity == "Critical": action = "Merge / 301"
         elif winner['p_intent'] != top_loser['p_intent']: action = "Split Intent"
@@ -318,8 +286,6 @@ def run_full_analysis(df_raw, brands):
 # ==========================================
 # 🖥️ 6. MAIN APPLICATION
 # ==========================================
-
-# Sidebar
 with st.sidebar:
     st.header("⚙️ الإعدادات")
     uploaded_file = st.file_uploader("ملف المصادقة (JSON)", type="json")
@@ -334,33 +300,31 @@ with st.sidebar:
 
 # Auth Flow
 if uploaded_file:
-    # 1. حفظ الملف المرفوع مؤقتاً على السيرفر
+    # --- FIXED: Save file properly before passing to flow ---
     with open("client_secret.json", "wb") as f:
         f.write(uploaded_file.getbuffer())
-
-    # 2. تمرير "اسم الملف" (String) بدلاً من الكائن نفسه
+        
     flow = InstalledAppFlow.from_client_secrets_file("client_secret.json", ['https://www.googleapis.com/auth/webmasters.readonly'])
-    
     flow.redirect_uri = "urn:ietf:wg:oauth:2.0:oob"
     auth_url, _ = flow.authorization_url()
     
     if 'creds' not in st.session_state:
-        st.info("👋 يرجى المصادقة للبدء")
-        st.markdown(f"[**👉 اضغط هنا للحصول على كود المصادقة**]({auth_url})")
-        auth_code = st.text_input("أدخل الكود هنا:")
+        st.info("👋 مرحباً بك! يرجى المصادقة.")
+        st.markdown(f"""
+        <a href="{auth_url}" target="_blank" style="background:#3b82f6; color:white; padding:10px 20px; border-radius:10px; text-decoration:none; display:block; text-align:center;">
+        👉 1. اضغط هنا للحصول على كود جديد
+        </a>
+        """, unsafe_allow_html=True)
+        auth_code = st.text_input("2. الصق الكود هنا:", placeholder="4/1A...")
         
         if auth_code:
-            # نمرر الكائن uploaded_file للدالة (أو نعدلها لتقبل المسار، لكن الكود الحالي للدالة authenticate_gsc يتعامل معه)
-            # الأفضل هنا استخدام المسار الذي حفظناه أو تعديل المنطق قليلاً.
-            # لتبسيط الأمر وتفادي أخطاء أخرى، سنستخدم authenticate_gsc الموجودة في الكود القديم ونمرر لها الملف
-            service = authenticate_gsc(auth_code, uploaded_file)
+            service = authenticate_gsc(auth_code)
             if service:
                 st.session_state.creds = service
                 st.rerun()
             else:
-                st.error("كود خاطئ! حاول مجدداً برابط جديد.")
+                st.error("❌ كود خاطئ أو منتهي الصلاحية! حاول مجدداً.")
 
-# Main Dashboard
 if 'creds' in st.session_state:
     service = st.session_state.creds
     
@@ -381,33 +345,28 @@ if 'creds' in st.session_state:
             else:
                 st.warning("⚠️ لا توجد بيانات!")
 
-    # Results View
     if 'report' in st.session_state:
         df = st.session_state.report
         
-        # Filters
         st.markdown("---")
         c1, c2, c3 = st.columns(3)
         with c1:
-            sev_filter = st.multiselect("تصفية حسب الخطورة", df['Severity'].unique(), default=['Critical', 'High'], help="اختر مستوى الخطورة للعرض")
+            sev_filter = st.multiselect("تصفية حسب الخطورة", df['Severity'].unique(), default=['Critical', 'High'])
         with c2:
             act_filter = st.multiselect("تصفية حسب الإجراء", df['Action'].unique())
         with c3:
             market_filter = st.multiselect("تصفية حسب السوق", df['Market'].unique())
             
-        # Apply Filters
         if sev_filter: df = df[df['Severity'].isin(sev_filter)]
         if act_filter: df = df[df['Action'].isin(act_filter)]
         if market_filter: df = df[df['Market'].isin(market_filter)]
         
-        # Metrics
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("🔍 الكلمات المتضاربة", len(df))
         m2.metric("🔥 حالات حرجة", len(df[df['Severity']=='Critical']))
         m3.metric("📉 زيارات ضائعة", f"{df['Traffic_Loss'].sum():,}")
         m4.metric("🛠️ فرص دمج", len(df[df['Action']=='Merge / 301']))
         
-        # Table
         st.subheader("📋 تقرير التضارب التفصيلي")
         
         def highlight_row(s):
@@ -420,7 +379,6 @@ if 'creds' in st.session_state:
             height=600
         )
         
-        # Excel Export
         excel_data = to_excel(df)
         st.download_button(
             label="📥 تحميل التقرير (Excel XLSX)",
@@ -428,8 +386,6 @@ if 'creds' in st.session_state:
             file_name=f'SEO_Audit_{datetime.date.today()}.xlsx',
             mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
-
 else:
     if not uploaded_file:
         st.info("⬅️ ابدأ برفع ملف المصادقة (client_secret.json) من القائمة الجانبية.")
-
