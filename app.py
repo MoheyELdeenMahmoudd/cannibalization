@@ -12,74 +12,86 @@ from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 
 # ==========================================
-# 🎨 1. THEME & UI SETUP
+# 🎨 1. UI DESIGN SYSTEM (High Contrast Space Theme)
 # ==========================================
-st.set_page_config(page_title="Almaster Tech - Cannibalization Hunter", page_icon="🕵️", layout="wide")
+st.set_page_config(page_title="Almaster Tech - SEO Hunter", page_icon="🚀", layout="wide")
 
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap');
     
-    * { font-family: 'Cairo', sans-serif !important; }
+    /* Global Font & Direction */
+    * { font-family: 'Cairo', sans-serif !important; direction: rtl; }
     
+    /* Space Background */
     .stApp {
         background: url('https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=2072&auto=format&fit=crop') no-repeat center center fixed;
         background-size: cover;
     }
-    
     .stApp::before {
         content: ""; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
         background: rgba(1, 1, 114, 0.85); z-index: -1; pointer-events: none;
     }
 
-    .glass-card {
-        background: rgba(255, 255, 255, 0.95);
-        border-radius: 16px;
-        padding: 25px;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-        margin-bottom: 20px;
-        border: 1px solid rgba(255,255,255,0.2);
-    }
-
-    h1, h2, h3 { color: #010172 !important; font-weight: 800 !important; }
-    p, label { color: #333 !important; font-weight: 600 !important; }
+    /* --- Typography --- */
+    h1, h2, h3, h4, .stMarkdown { color: #ffffff !important; }
+    p, label { color: #e0e7ff !important; font-size: 15px !important; font-weight: 600 !important; }
     
-    /* Input Fields Styling (Fixing the White Box issue) */
-    .stTextInput > div > div > input {
-        background-color: #f0f2f6;
-        color: #333;
-        border-radius: 10px;
-        border: 1px solid #ccc;
+    /* --- Inputs Styling (Clean White) --- */
+    .stTextInput input, .stNumberInput input, .stTextArea textarea {
+        background-color: #ffffff !important;
+        color: #000000 !important;
+        border-radius: 12px;
+        border: 2px solid #4dabf7;
+        padding: 10px;
     }
-    .stTextArea > div > div > textarea {
-        background-color: #f0f2f6;
-        color: #333;
-        border-radius: 10px;
-    }
-
-    /* Buttons */
+    /* File Uploader */
+    .stFileUploader section { background-color: rgba(255,255,255,0.1); border-radius: 12px; color: white; }
+    
+    /* --- Buttons --- */
     .stButton>button {
-        background: linear-gradient(135deg, #2F45FF, #010172);
+        background: linear-gradient(90deg, #2F45FF, #4dabf7);
         color: white; border: none; border-radius: 12px;
-        height: 50px; font-weight: 700; width: 100%;
-        transition: 0.3s;
+        height: 55px; font-weight: 800; font-size: 18px; width: 100%;
+        transition: 0.3s; box-shadow: 0 5px 15px rgba(0,0,0,0.3);
     }
     .stButton>button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 10px 20px rgba(0,0,0,0.4);
+        transform: translateY(-3px);
+        box-shadow: 0 10px 25px rgba(47, 69, 255, 0.6);
         color: white;
     }
 
-    /* Logo */
-    .logo-text { font-size: 32px; font-weight: 800; color: white; text-align: center; margin-bottom: 10px; text-shadow: 0 2px 10px rgba(0,0,0,0.5); }
-    .logo-text span { color: #4dabf7; }
+    /* --- Metrics Cards --- */
+    div[data-testid="stMetric"] {
+        background: rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255,255,255,0.2);
+        padding: 20px; border-radius: 15px;
+        text-align: center; color: white;
+    }
+    div[data-testid="stMetricLabel"] { color: #cbd5e1; }
+    div[data-testid="stMetricValue"] { color: #4dabf7; font-size: 32px; font-weight: 800; }
+
+    /* --- Logo Area --- */
+    .logo-container { text-align: center; margin-bottom: 30px; padding: 20px; background: rgba(0,0,0,0.3); border-radius: 20px; }
+    .logo-main { font-size: 40px; font-weight: 900; color: white; letter-spacing: 2px; }
+    .logo-sub { color: #4dabf7; }
+    
+    /* --- Table Styling --- */
+    .stDataFrame { direction: ltr; } /* Keep table LTR for URLs */
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown("""<div class="logo-text">ALMASTER <span>TECH</span></div>""", unsafe_allow_html=True)
+# Logo Header
+st.markdown("""
+<div class="logo-container">
+    <div class="logo-main">ALMASTER <span class="logo-sub">TECH</span></div>
+    <div style="color:#cbd5e1; font-size:14px;">Enterprise SEO Cannibalization System v10.0</div>
+</div>
+""", unsafe_allow_html=True)
 
 # ==========================================
-# ⚙️ 2. LOGIC CONFIGURATION
+# ⚙️ 2. CONFIG & LOGIC (Optimized)
 # ==========================================
 class Config:
     MIN_IMP_QUANTILE = 0.2
@@ -100,9 +112,7 @@ class Config:
     COMM_QUERY_TERMS = ['buy', 'price', 'cost', 'service', 'company', 'agency', 'hire', 'شراء', 'سعر', 'تكلفة', 'شركة', 'خدمة']
     INFO_QUERY_TERMS = ['how', 'what', 'guide', 'tutorial', 'tips', 'why', 'review', 'vs', 'best', 'top', 'كيف', 'دليل', 'شرح', 'نصائح']
 
-# ==========================================
-# 🧠 3. HELPER FUNCTIONS
-# ==========================================
+# Helper Functions
 def get_expected_ctr(position):
     pos = int(round(max(position, 1)))
     return Config.EXPECTED_CTR.get(pos, 1.0)
@@ -161,13 +171,10 @@ def generate_action_plan(severity, w_type, l_type, q_type, ctr_perf):
     if ctr_perf < 0.6: return "🎨 FIX SNIPPET (Low CTR)"
     return "✅ MONITOR"
 
-# ==========================================
-# 🔌 4. AUTHENTICATION
-# ==========================================
+# Auth
 def authenticate_gsc(uploaded_client_secret):
     SCOPES = ['https://www.googleapis.com/auth/webmasters.readonly']
     if uploaded_client_secret:
-        # Save temp file
         with open("client_secret.json", "wb") as f:
             f.write(uploaded_client_secret.getbuffer())
         
@@ -177,20 +184,22 @@ def authenticate_gsc(uploaded_client_secret):
         auth_url, _ = flow.authorization_url(prompt='consent')
         
         st.markdown(f"""
-        <div class="glass-card" style="text-align:center; padding:15px;">
-            <h4 style="margin:0 0 10px 0;">🔐 خطوة المصادقة (مطلوبة مرة واحدة)</h4>
-            <a href="{auth_url}" target="_blank" style="background:#2F45FF; color:white; padding:10px 20px; border-radius:50px; text-decoration:none; font-weight:bold;">1️⃣ اضغط هنا للحصول على الكود</a>
+        <div style="background:rgba(255,255,255,0.1); padding:20px; border-radius:15px; text-align:center; border:1px solid rgba(255,255,255,0.2); margin-bottom:20px;">
+            <h3 style="margin-top:0">🔐 المصادقة مطلوبة</h3>
+            <p>1. اضغط على الزر أدناه لتسجيل الدخول.</p>
+            <a href="{auth_url}" target="_blank" style="display:inline-block; background:#2F45FF; color:white; padding:12px 25px; border-radius:30px; text-decoration:none; font-weight:bold; margin:10px 0;">🔗 فتح صفحة جوجل</a>
+            <p style="margin-bottom:0">2. انسخ الكود وألصقه في الخانة بالأسفل.</p>
         </div>
         """, unsafe_allow_html=True)
         
-        auth_code = st.text_input("2️⃣ الصق كود المصادقة هنا واضغط Enter:", key="auth_code_input")
+        auth_code = st.text_input("أدخل كود المصادقة هنا:", key="auth_code_input", placeholder="4/0A...")
         
         if auth_code:
             try:
                 flow.fetch_token(code=auth_code)
                 return build('searchconsole', 'v1', credentials=flow.credentials)
             except Exception as e:
-                st.error(f"❌ كود خاطئ أو منتهي الصلاحية: {e}")
+                st.error(f"❌ كود خاطئ: {e}")
                 return None
     return None
 
@@ -253,81 +262,88 @@ def run_analysis(df, brand_names_input):
     return pd.DataFrame(report_data)
 
 # ==========================================
-# 🖥️ 5. APP LAYOUT & STATE MANAGEMENT
+# 🖥️ 5. APP LAYOUT & STATE
 # ==========================================
-
-# >> SOLUTION FOR THE BUTTON ISSUE: Session State <<
 if "audit_started" not in st.session_state:
     st.session_state.audit_started = False
 
-col1, col2 = st.columns([1, 2])
-
-with col1:
-    st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-    st.markdown("### ⚙️ الإعدادات", unsafe_allow_html=True)
+# Layout: Sidebar for Settings, Main for Results
+with st.sidebar:
+    st.header("⚙️ إعدادات الفحص")
     
-    uploaded_secret = st.file_uploader("📂 ملف المصادقة (client_secret.json)", type="json")
+    uploaded_secret = st.file_uploader("ملف المصادقة (JSON)", type="json")
+    st.caption("يجب رفع ملف client_secret.json الخاص بـ GSC API.")
+    
+    st.markdown("---")
     
     site_url = st.text_input("رابط الموقع (GSC Property)", value="sc-domain:almaster.tech")
     days = st.slider("فترة التحليل (أيام)", 7, 90, 30)
-    brands = st.text_area("أسماء البراند (للحماية)", "almaster, المستر, ماستر")
+    brands = st.text_area("كلمات البراند (للحماية)", "almaster, المستر, ماستر")
     
     if st.button("🚀 بدء الفحص الشامل"):
         st.session_state.audit_started = True
 
-    st.markdown('</div>', unsafe_allow_html=True)
-
-with col2:
-    # Only show content if started OR if secret is uploaded
-    if st.session_state.audit_started:
-        if not uploaded_secret:
-            st.warning("⚠️ يرجى رفع ملف المصادقة (client_secret.json) من قائمة الإعدادات أولاً.")
-        else:
-            service = authenticate_gsc(uploaded_secret)
-            
-            if service:
-                with st.spinner('⏳ جاري سحب البيانات من جوجل...'):
-                    end_date = datetime.date.today()
-                    start_date = end_date - datetime.timedelta(days=days)
-                    req = {'startDate': start_date.isoformat(), 'endDate': end_date.isoformat(), 
-                           'dimensions': ['query', 'page'], 'rowLimit': 25000}
-                    try:
-                        resp = service.searchanalytics().query(siteUrl=site_url, body=req).execute()
-                        rows = resp.get('rows', [])
-                    except Exception as e:
-                        st.error(f"Error fetching data: {e}")
-                        rows = []
-
-                if rows:
-                    df_raw = pd.DataFrame([{
-                        'query': r['keys'][0], 'page': r['keys'][1],
-                        'clicks': r['clicks'], 'impressions': r['impressions'],
-                        'ctr': r['ctr'], 'position': r['position']
-                    } for r in rows])
-                    
-                    with st.spinner('🧠 جاري تحليل التنافس بالذكاء الاصطناعي (V8)...'):
-                        report = run_analysis(df_raw, [x.strip() for x in brands.split(',')])
-                    
-                    if not report.empty:
-                        report = report.sort_values(by=['Priority_Score'], ascending=False)
-                        
-                        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-                        m1, m2, m3 = st.columns(3)
-                        m1.metric("إجمالي التضارب", len(report))
-                        m2.metric("حالات حرجة 🔥", len(report[report['Severity'] == "🔥 Critical"]))
-                        m3.metric("زيارات ضائعة", f"{report['Est_Traffic_Loss'].sum():,}")
-                        st.markdown('</div>', unsafe_allow_html=True)
-                        
-                        st.markdown("### 📋 النتائج التفصيلية")
-                        st.dataframe(report.style.applymap(lambda x: 'color: red; font-weight: bold' if x == '🔥 Critical' else '', subset=['Severity']), use_container_width=True)
-                        
-                        csv = report.to_csv(index=False).encode('utf-8')
-                        st.download_button("📥 تحميل التقرير (Excel/CSV)", csv, "report.csv", "text/csv")
-                    else:
-                        st.balloons()
-                        st.success("✅ موقعك نظيف! لا يوجد cannibalization.")
-                else:
-                    st.warning("⚠️ لا توجد بيانات في Google Search Console لهذا النطاق في الفترة المحددة.")
+# Main Content Area
+if st.session_state.audit_started:
+    if not uploaded_secret:
+        st.warning("⚠️ يرجى رفع ملف المصادقة من القائمة الجانبية أولاً.")
     else:
-        # Welcome Screen
-        st.info("👈 املأ الإعدادات في القائمة الجانبية واضغط على 'بدء الفحص الشامل' للبدء.")
+        service = authenticate_gsc(uploaded_secret)
+        
+        if service:
+            with st.spinner('⏳ جاري الاتصال بجوجل وسحب البيانات...'):
+                end_date = datetime.date.today()
+                start_date = end_date - datetime.timedelta(days=days)
+                req = {'startDate': start_date.isoformat(), 'endDate': end_date.isoformat(), 
+                       'dimensions': ['query', 'page'], 'rowLimit': 25000}
+                try:
+                    resp = service.searchanalytics().query(siteUrl=site_url, body=req).execute()
+                    rows = resp.get('rows', [])
+                except Exception as e:
+                    st.error(f"حدث خطأ أثناء الاتصال: {e}")
+                    rows = []
+
+            if rows:
+                df_raw = pd.DataFrame([{
+                    'query': r['keys'][0], 'page': r['keys'][1],
+                    'clicks': r['clicks'], 'impressions': r['impressions'],
+                    'ctr': r['ctr'], 'position': r['position']
+                } for r in rows])
+                
+                with st.spinner('🧠 جاري تحليل التضارب بالذكاء الاصطناعي...'):
+                    report = run_analysis(df_raw, [x.strip() for x in brands.split(',')])
+                
+                if not report.empty:
+                    report = report.sort_values(by=['Priority_Score'], ascending=False)
+                    
+                    # Summary Cards
+                    c1, c2, c3 = st.columns(3)
+                    c1.metric("مشاكل التضارب", len(report))
+                    c2.metric("حالات حرجة جداً 🔥", len(report[report['Severity'] == "🔥 Critical"]))
+                    c3.metric("زيارات ضائعة (تقديري)", f"{report['Est_Traffic_Loss'].sum():,}")
+                    
+                    st.markdown("### 📋 النتائج التفصيلية")
+                    
+                    # Styling the dataframe for maximum readability
+                    st.dataframe(
+                        report.style.applymap(lambda x: 'color: #ff4b4b; font-weight: bold' if x == '🔥 Critical' else '', subset=['Severity'])
+                                    .format({'Overlap': "{:.1f}%", 'Winner_CTR': "{:.1f}%"}),
+                        use_container_width=True,
+                        height=500
+                    )
+                    
+                    csv = report.to_csv(index=False).encode('utf-8')
+                    st.download_button("📥 تحميل التقرير الكامل (Excel)", csv, "seo_audit.csv", "text/csv")
+                else:
+                    st.balloons()
+                    st.success("✅ أداء الموقع ممتاز! لا يوجد أي تضارب (Cannibalization) في الكلمات.")
+            else:
+                st.info("ℹ️ لا توجد بيانات مسجلة في Search Console لهذا النطاق في الفترة المحددة.")
+else:
+    # Welcome / Empty State
+    st.markdown("""
+    <div style="background:rgba(255,255,255,0.05); padding:40px; border-radius:20px; text-align:center; margin-top:50px;">
+        <h2>👋 مرحبًا بك في نظام تحليل التضارب</h2>
+        <p>ابدأ بضبط الإعدادات من القائمة الجانبية ثم اضغط على زر "بدء الفحص".</p>
+    </div>
+    """, unsafe_allow_html=True)
