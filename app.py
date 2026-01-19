@@ -5,345 +5,399 @@ import math
 import re
 import os
 import datetime
+import io
 from urllib.parse import urlparse
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials
-from google.auth.transport.requests import Request
 
 # ==========================================
-# 🎨 1. UI DESIGN SYSTEM (High Contrast Space Theme)
+# 🎨 1. UI/UX CONFIGURATION
 # ==========================================
-st.set_page_config(page_title="Almaster Tech - SEO Hunter", page_icon="🚀", layout="wide")
+st.set_page_config(page_title="Almaster Tech - SEO Suite", page_icon="🚀", layout="wide")
 
+# Custom CSS for Professional Look & RTL
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap');
     
-    /* Global Font & Direction */
-    * { font-family: 'Cairo', sans-serif !important; direction: rtl; }
+    * { font-family: 'Cairo', sans-serif !important; }
     
-    /* Space Background */
     .stApp {
-        background: url('https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=2072&auto=format&fit=crop') no-repeat center center fixed;
-        background-size: cover;
-    }
-    .stApp::before {
-        content: ""; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: rgba(1, 1, 114, 0.85); z-index: -1; pointer-events: none;
-    }
-
-    /* --- Typography --- */
-    h1, h2, h3, h4, .stMarkdown { color: #ffffff !important; }
-    p, label { color: #e0e7ff !important; font-size: 15px !important; font-weight: 600 !important; }
-    
-    /* --- Inputs Styling (Clean White) --- */
-    .stTextInput input, .stNumberInput input, .stTextArea textarea {
-        background-color: #ffffff !important;
-        color: #000000 !important;
-        border-radius: 12px;
-        border: 2px solid #4dabf7;
-        padding: 10px;
-    }
-    /* File Uploader */
-    .stFileUploader section { background-color: rgba(255,255,255,0.1); border-radius: 12px; color: white; }
-    
-    /* --- Buttons --- */
-    .stButton>button {
-        background: linear-gradient(90deg, #2F45FF, #4dabf7);
-        color: white; border: none; border-radius: 12px;
-        height: 55px; font-weight: 800; font-size: 18px; width: 100%;
-        transition: 0.3s; box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-    }
-    .stButton>button:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 10px 25px rgba(47, 69, 255, 0.6);
+        background: linear-gradient(to bottom, #0f172a, #1e293b);
         color: white;
     }
-
-    /* --- Metrics Cards --- */
-    div[data-testid="stMetric"] {
-        background: rgba(255, 255, 255, 0.1);
-        backdrop-filter: blur(10px);
-        border: 1px solid rgba(255,255,255,0.2);
-        padding: 20px; border-radius: 15px;
-        text-align: center; color: white;
-    }
-    div[data-testid="stMetricLabel"] { color: #cbd5e1; }
-    div[data-testid="stMetricValue"] { color: #4dabf7; font-size: 32px; font-weight: 800; }
-
-    /* --- Logo Area --- */
-    .logo-container { text-align: center; margin-bottom: 30px; padding: 20px; background: rgba(0,0,0,0.3); border-radius: 20px; }
-    .logo-main { font-size: 40px; font-weight: 900; color: white; letter-spacing: 2px; }
-    .logo-sub { color: #4dabf7; }
     
-    /* --- Table Styling --- */
-    .stDataFrame { direction: ltr; } /* Keep table LTR for URLs */
+    /* Metrics */
+    div[data-testid="stMetric"] {
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 12px;
+        padding: 15px;
+        text-align: right;
+    }
+    div[data-testid="stMetricValue"] { color: #3b82f6; font-size: 28px; }
+
+    /* Tables */
+    .stDataFrame { direction: ltr; } /* URLs need LTR */
+    
+    /* Buttons */
+    .stButton>button {
+        background: #2563eb; color: white; border-radius: 8px; font-weight: bold;
+        transition: 0.3s; border: none;
+    }
+    .stButton>button:hover { background: #1d4ed8; }
+
+    /* Inputs */
+    .stTextInput input, .stSelectbox, .stMultiSelect {
+        color: #333 !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
-# Logo Header
+# Header
 st.markdown("""
-<div class="logo-container">
-    <div class="logo-main">ALMASTER <span class="logo-sub">TECH</span></div>
-    <div style="color:#cbd5e1; font-size:14px;">Enterprise SEO Cannibalization System v10.0</div>
+<div style="text-align: center; margin-bottom: 30px;">
+    <h1 style="color:white; margin:0;">ALMASTER <span style="color:#3b82f6;">TECH</span></h1>
+    <p style="color:#94a3b8; font-size:14px;">Enterprise SEO Cannibalization System v11.0</p>
 </div>
 """, unsafe_allow_html=True)
 
 # ==========================================
-# ⚙️ 2. CONFIG & LOGIC (Optimized)
+# ⚙️ 2. LOGIC CONFIGURATION
 # ==========================================
 class Config:
     MIN_IMP_QUANTILE = 0.2
     MIN_IMP_ABSOLUTE = 10
     MAX_DEPTH_PENALTY = 6
-    WEIGHT_CLICKS = 0.4
-    WEIGHT_POS = 0.3
-    WEIGHT_IMPS = 0.2
-    WEIGHT_DEPTH = 0.1
-    SEVERITY_CRITICAL = 0.8
-    SEVERITY_HIGH = 0.5
-    SEVERITY_MEDIUM = 0.3
+    WEIGHTS = {'clicks': 0.4, 'pos': 0.3, 'imps': 0.2, 'depth': 0.1}
     EXPECTED_CTR = {1: 30.0, 2: 15.0, 3: 10.0, 4: 7.0, 5: 5.0, 6: 3.5, 7: 3.0, 8: 2.5, 9: 2.0, 10: 1.5}
     URL_PATTERNS = {
-        'Commercial': {'terms': ['/product', '/service', '/shop', 'cart', 'checkout', '/pricing', 'booking'], 'weight': 3},
+        'Commercial': {'terms': ['/product', '/service', '/shop', 'cart', 'checkout', '/pricing'], 'weight': 3},
         'Informational': {'terms': ['/blog', '/news', '/article', '/guide', '/wiki', 'learn'], 'weight': 2}
     }
-    COMM_QUERY_TERMS = ['buy', 'price', 'cost', 'service', 'company', 'agency', 'hire', 'شراء', 'سعر', 'تكلفة', 'شركة', 'خدمة']
-    INFO_QUERY_TERMS = ['how', 'what', 'guide', 'tutorial', 'tips', 'why', 'review', 'vs', 'best', 'top', 'كيف', 'دليل', 'شرح', 'نصائح']
+    COMM_TERMS = ['buy', 'price', 'cost', 'service', 'company', 'agency', 'hire', 'شراء', 'سعر', 'تكلفة', 'شركة', 'خدمة']
+    INFO_TERMS = ['how', 'what', 'guide', 'tutorial', 'tips', 'why', 'review', 'vs', 'best', 'كيف', 'دليل', 'شرح', 'نصائح']
 
-# Helper Functions
-def get_expected_ctr(position):
-    pos = int(round(max(position, 1)))
-    return Config.EXPECTED_CTR.get(pos, 1.0)
-
+# ==========================================
+# 🧠 3. ADVANCED LOGIC FUNCTIONS
+# ==========================================
 def identify_market_segment(url):
     try:
-        parsed = urlparse(str(url))
-        path = parsed.path.strip('/')
-        parts = path.split('/')
-        first_segment = parts[0].lower() if parts else ""
-        if re.match(r'^[a-z]{2}-[a-z]{2}$', first_segment): return first_segment.upper()
-        if re.match(r'^[a-z]{2}$', first_segment): return f"Global-{first_segment.upper()}"
+        path = urlparse(str(url)).path.strip('/').split('/')
+        first = path[0].lower() if path else ""
+        if re.match(r'^[a-z]{2}-[a-z]{2}$', first): return first.upper()
+        if re.match(r'^[a-z]{2}$', first): return f"Global-{first.upper()}"
         return "Global-EN"
     except: return "Unknown"
 
-def classify_query_type(query, brand_list):
-    q = str(query).lower()
-    for brand in brand_list:
-        if brand.lower() in q: return "Brand"
-    if len(q.split()) >= 4: return "Long-Tail"
-    return "Generic"
+def detect_intents_vectorized(df):
+    # Vectorized String Operations for Speed
+    q_lower = df['query'].str.lower()
+    url_lower = df['page_clean'].str.lower()
+    
+    # Query Intent
+    c_mask = q_lower.apply(lambda x: any(t in x for t in Config.COMM_TERMS))
+    i_mask = q_lower.apply(lambda x: any(t in x for t in Config.INFO_TERMS))
+    
+    df['q_intent'] = np.select(
+        [c_mask & ~i_mask, i_mask & ~c_mask], 
+        ['Commercial', 'Informational'], 
+        default='Navigational/General'
+    )
+    
+    # Page Intent
+    conditions = [url_lower.str.contains(t) for t in Config.URL_PATTERNS['Commercial']['terms']]
+    df['p_intent'] = np.where(np.any(conditions, axis=0), 'Commercial', 'General')
+    
+    conditions_info = [url_lower.str.contains(t) for t in Config.URL_PATTERNS['Informational']['terms']]
+    df['p_intent'] = np.where(np.any(conditions_info, axis=0), 'Informational', df['p_intent'])
+    
+    return df
 
-def detect_page_intent_weighted(url):
-    url_lower = str(url).lower()
-    scores = {'Commercial': 0, 'Informational': 0, 'General': 0.1}
-    for intent, data in Config.URL_PATTERNS.items():
-        for term in data['terms']:
-            if term in url_lower: scores[intent] += data['weight']
-    return max(scores, key=scores.get)
+def calculate_score_vectorized(df):
+    # Normalize
+    max_imp = df.groupby('query_market')['impressions'].transform('max')
+    max_click = df.groupby('query_market')['clicks'].transform('max')
+    
+    norm_imp = df['impressions'] / max_imp.replace(0, 1)
+    norm_click = df['clicks'] / max_click.replace(0, 1)
+    
+    # Log Position Score
+    pos_score = 10 / (np.log(df['position'] + 1) + 1)
+    
+    # Depth Penalty
+    depth = df['page_clean'].str.count('/').clip(upper=Config.MAX_DEPTH_PENALTY)
+    depth_factor = 1 / (depth + 1)
+    
+    score = (norm_click * Config.WEIGHTS['clicks']) + \
+            (pos_score * Config.WEIGHTS['pos']) + \
+            (norm_imp * Config.WEIGHTS['imps']) + \
+            (depth_factor * Config.WEIGHTS['depth'])
+    
+    return score
 
-def detect_intents_batch(df):
-    def _process_row(row):
-        q = str(row['query']).lower()
-        c_score = sum(1 for t in Config.COMM_QUERY_TERMS if t in q)
-        i_score = sum(1 for t in Config.INFO_QUERY_TERMS if t in q)
-        q_intent = 'Commercial' if c_score > i_score else 'Informational' if i_score > c_score else 'Navigational/General'
-        p_intent = detect_page_intent_weighted(row['page_clean'])
-        return pd.Series([q_intent, p_intent])
-    return df.apply(_process_row, axis=1)
-
-def calculate_vectorized_score(df_group):
-    max_imp = max(df_group['impressions'].max(), 1)
-    max_click = max(df_group['clicks'].max(), 1)
-    norm_imp = df_group['impressions'] / max_imp
-    norm_click = df_group['clicks'] / max_click
-    pos_score = 10 / (np.log(df_group['position'] + 1) + 1)
-    depths = df_group['page_clean'].str.count('/').clip(upper=Config.MAX_DEPTH_PENALTY)
-    depth_factor = 1 / (depths + 1)
-    return (norm_click * Config.WEIGHT_CLICKS) + (pos_score * Config.WEIGHT_POS) + \
-           (norm_imp * Config.WEIGHT_IMPS) + (depth_factor * Config.WEIGHT_DEPTH)
-
-def generate_action_plan(severity, w_type, l_type, q_type, ctr_perf):
-    if q_type == 'Brand': return "🛡️ BRAND PROTECTION"
-    if severity == "🔥 Critical" and w_type == l_type: return "⛔ MERGE / 301"
-    if w_type != l_type: return "✂️ SPLIT INTENT"
-    if ctr_perf < 0.6: return "🎨 FIX SNIPPET (Low CTR)"
-    return "✅ MONITOR"
-
-# Auth
-def authenticate_gsc(uploaded_client_secret):
+# ==========================================
+# 🔌 4. DATA HANDLING (Pagination & Excel)
+# ==========================================
+@st.cache_resource
+def authenticate_gsc(auth_code, _uploaded_secret):
     SCOPES = ['https://www.googleapis.com/auth/webmasters.readonly']
-    if uploaded_client_secret:
+    try:
         with open("client_secret.json", "wb") as f:
-            f.write(uploaded_client_secret.getbuffer())
+            f.write(_uploaded_secret.getbuffer())
         
         flow = InstalledAppFlow.from_client_secrets_file("client_secret.json", SCOPES)
         flow.redirect_uri = "urn:ietf:wg:oauth:2.0:oob"
-        
-        auth_url, _ = flow.authorization_url(prompt='consent')
-        
-        st.markdown(f"""
-        <div style="background:rgba(255,255,255,0.1); padding:20px; border-radius:15px; text-align:center; border:1px solid rgba(255,255,255,0.2); margin-bottom:20px;">
-            <h3 style="margin-top:0">🔐 المصادقة مطلوبة</h3>
-            <p>1. اضغط على الزر أدناه لتسجيل الدخول.</p>
-            <a href="{auth_url}" target="_blank" style="display:inline-block; background:#2F45FF; color:white; padding:12px 25px; border-radius:30px; text-decoration:none; font-weight:bold; margin:10px 0;">🔗 فتح صفحة جوجل</a>
-            <p style="margin-bottom:0">2. انسخ الكود وألصقه في الخانة بالأسفل.</p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        auth_code = st.text_input("أدخل كود المصادقة هنا:", key="auth_code_input", placeholder="4/0A...")
-        
-        if auth_code:
-            try:
-                flow.fetch_token(code=auth_code)
-                return build('searchconsole', 'v1', credentials=flow.credentials)
-            except Exception as e:
-                st.error(f"❌ كود خاطئ: {e}")
-                return None
-    return None
+        flow.fetch_token(code=auth_code)
+        return build('searchconsole', 'v1', credentials=flow.credentials)
+    except Exception as e:
+        return None
 
-@st.cache_data(show_spinner=False)
-def run_analysis(df, brand_names_input):
-    df.columns = [c.lower().strip() for c in df.columns]
+def fetch_all_data(service, site_url, days):
+    end_date = datetime.date.today()
+    start_date = end_date - datetime.timedelta(days=days)
+    all_rows = []
+    start_row = 0
+    batch_size = 25000
+    
+    # Progress Bar UI
+    progress_text = "جاري سحب البيانات من جوجل... (قد يستغرق وقتاً للمواقع الكبيرة)"
+    my_bar = st.progress(0, text=progress_text)
+    
+    while True:
+        req = {
+            'startDate': start_date.isoformat(), 'endDate': end_date.isoformat(),
+            'dimensions': ['query', 'page'], 'rowLimit': batch_size, 'startRow': start_row
+        }
+        try:
+            resp = service.searchanalytics().query(siteUrl=site_url, body=req).execute()
+            rows = resp.get('rows', [])
+            if not rows: break
+            
+            all_rows.extend(rows)
+            start_row += len(rows)
+            
+            # Fake progress update
+            my_bar.progress(min(start_row / 100000, 0.9), text=f"تم سحب {len(all_rows)} صف...")
+            
+            if len(rows) < batch_size: break
+        except Exception as e:
+            st.error(f"API Error: {e}")
+            break
+            
+    my_bar.empty()
+    return all_rows
+
+def to_excel(df):
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        df.to_excel(writer, index=False, sheet_name='Cannibalization')
+        workbook = writer.book
+        worksheet = writer.sheets['Cannibalization']
+        
+        # Formats
+        header_fmt = workbook.add_format({'bold': True, 'font_color': 'white', 'bg_color': '#010172', 'border': 1})
+        red_fmt = workbook.add_format({'bg_color': '#FFC7CE', 'font_color': '#9C0006'})
+        
+        # Apply Header Format
+        for col_num, value in enumerate(df.columns.values):
+            worksheet.write(0, col_num, value, header_fmt)
+            
+        # Adjust Column Width
+        worksheet.set_column(0, 10, 20) # General
+        worksheet.set_column(1, 1, 30) # Query
+        
+    return output.getvalue()
+
+# ==========================================
+# 📊 5. ANALYSIS ENGINE
+# ==========================================
+@st.cache_data
+def run_full_analysis(df_raw, brands):
+    df = df_raw.copy()
+    df.columns = [c.lower() for c in df.columns]
+    
+    # Preprocessing
     df['page_clean'] = df['page'].astype(str).str.split('?').str[0].str.split('#').str[0].str.rstrip('/')
     df['market'] = df['page_clean'].apply(identify_market_segment)
-    df['query_type'] = df['query'].apply(lambda x: classify_query_type(x, brand_names_input))
-    df[['q_intent', 'p_intent']] = detect_intents_batch(df)
+    
+    # Intent Detection
+    df = detect_intents_vectorized(df)
+    
+    # Grouping
+    df['query_market'] = df['query'] + "_" + df['market']
     df['weighted_pos'] = df['position'] * df['impressions']
     
-    group_cols = ['query', 'market', 'query_type', 'q_intent', 'page_clean', 'p_intent']
-    df_grouped = df.groupby(group_cols).agg({'clicks': 'sum', 'impressions': 'sum', 'weighted_pos': 'sum'}).reset_index()
-    df_grouped['position'] = df_grouped['weighted_pos'] / df_grouped['impressions']
-    df_grouped['ctr'] = (df_grouped['clicks'] / df_grouped['impressions'].replace(0, 1)) * 100
+    grp = df.groupby(['query', 'market', 'query_market', 'q_intent', 'page_clean', 'p_intent']).agg(
+        clicks=('clicks', 'sum'),
+        impressions=('impressions', 'sum'),
+        weighted_pos=('weighted_pos', 'sum')
+    ).reset_index()
     
-    quantile_thresh = df_grouped['impressions'].quantile(Config.MIN_IMP_QUANTILE)
-    min_imp = max(int(quantile_thresh), Config.MIN_IMP_ABSOLUTE)
-    df_filtered = df_grouped[df_grouped['impressions'] >= min_imp].copy()
+    grp['position'] = grp['weighted_pos'] / grp['impressions']
+    grp['ctr'] = (grp['clicks'] / grp['impressions'].replace(0, 1)) * 100
     
-    report_data = []
-    for (query, market), group in df_filtered.groupby(['query', 'market']):
-        if len(group) < 2: continue
-        group = group.copy()
-        group['score'] = calculate_vectorized_score(group)
-        group = group.sort_values(by='score', ascending=False)
+    # Filtering Low Traffic
+    threshold = max(grp['impressions'].quantile(Config.MIN_IMP_QUANTILE), Config.MIN_IMP_ABSOLUTE)
+    grp = grp[grp['impressions'] >= threshold].copy()
+    
+    # Scoring
+    grp['score'] = calculate_score_vectorized(grp)
+    
+    # Cannibalization Detection
+    report = []
+    
+    # Sort by score desc within each query group
+    grp = grp.sort_values(['query_market', 'score'], ascending=[True, False])
+    
+    # Filter only groups with > 1 page
+    dupes = grp[grp.duplicated('query_market', keep=False)]
+    
+    for qm, group in dupes.groupby('query_market'):
         winner = group.iloc[0]
         losers = group.iloc[1:]
         top_loser = losers.iloc[0]
-        overlap = top_loser['score'] / winner['score'] if winner['score'] > 0 else 0
-        base_severity = overlap * (1.2 if winner['query_type'] == 'Brand' else 1.0)
+        
+        overlap = top_loser['score'] / winner['score']
+        
+        # Severity
+        is_brand = any(b in winner['query'] for b in brands)
+        severity_score = overlap * (1.2 if is_brand else 1.0)
         
         severity = "Low"
-        if base_severity > Config.SEVERITY_CRITICAL: severity = "🔥 Critical"
-        elif base_severity > Config.SEVERITY_HIGH: severity = "High"
-        elif base_severity > Config.SEVERITY_MEDIUM: severity = "Medium"
+        if severity_score > Config.SEVERITY_CRITICAL: severity = "Critical" # Removed emoji for clean sort
+        elif severity_score > Config.SEVERITY_HIGH: severity = "High"
+        elif severity_score > Config.SEVERITY_MEDIUM: severity = "Medium"
         
-        exp_ctr = get_expected_ctr(winner['position'])
-        ctr_perf = winner['ctr'] / exp_ctr if exp_ctr > 0 else 0
-        action = generate_action_plan(severity, winner['p_intent'], top_loser['p_intent'], winner['query_type'], ctr_perf)
+        # Metrics
         wasted_imps = losers['impressions'].sum()
-        est_traffic_loss = round(wasted_imps * (winner['ctr'] / 100))
+        traffic_loss = int(wasted_imps * (winner['ctr'] / 100))
         
-        traffic_factor = min(math.log(wasted_imps + 1) * 10, 50)
-        sev_points = { "🔥 Critical": 40, "High": 25, "Medium": 10, "Low": 5 }.get(severity, 5)
-        brand_points = 10 if winner['query_type'] == 'Brand' else 0
-        priority_score = min(traffic_factor + sev_points + brand_points, 100)
+        # Action Plan
+        action = "Monitor"
+        if winner['p_intent'] == top_loser['p_intent'] and severity == "Critical": action = "Merge / 301"
+        elif winner['p_intent'] != top_loser['p_intent']: action = "Split Intent"
         
-        difficulty = "Medium"
-        if "MERGE" in action or "SNIPPET" in action: difficulty = "Low"
-        elif "SPLIT" in action: difficulty = "High"
-
-        report_data.append({
-            'Market': market, 'Query': query, 'Severity': severity, 'Priority_Score': int(priority_score),
-            'Action_Plan': action, 'Difficulty': difficulty, 'Est_Traffic_Loss': est_traffic_loss,
-            'Winner': winner['page_clean'], 'Winner_CTR': round(winner['ctr'], 2),
-            'Loser': top_loser['page_clean'], 'Overlap': round(overlap * 100, 1)
+        report.append({
+            'Query': winner['query'],
+            'Market': winner['market'],
+            'Severity': severity,
+            'Winner': winner['page_clean'],
+            'Loser': top_loser['page_clean'],
+            'Overlap': round(overlap * 100, 1),
+            'Traffic_Loss': traffic_loss,
+            'Action': action,
+            'W_Intent': winner['p_intent'],
+            'L_Intent': top_loser['p_intent']
         })
-    return pd.DataFrame(report_data)
+        
+    return pd.DataFrame(report)
 
 # ==========================================
-# 🖥️ 5. APP LAYOUT & STATE
+# 🖥️ 6. MAIN APPLICATION
 # ==========================================
-if "audit_started" not in st.session_state:
-    st.session_state.audit_started = False
 
-# Layout: Sidebar for Settings, Main for Results
+# Sidebar
 with st.sidebar:
-    st.header("⚙️ إعدادات الفحص")
+    st.header("⚙️ الإعدادات")
+    uploaded_file = st.file_uploader("ملف المصادقة (JSON)", type="json")
     
-    uploaded_secret = st.file_uploader("ملف المصادقة (JSON)", type="json")
-    st.caption("يجب رفع ملف client_secret.json الخاص بـ GSC API.")
+    with st.expander("🔗 إعدادات الاتصال", expanded=True):
+        site_url = st.text_input("GSC Property", "sc-domain:almaster.tech")
+        days = st.slider("فترة التحليل", 7, 90, 30)
     
-    st.markdown("---")
+    with st.expander("🛡️ إعدادات البراند"):
+        brands_input = st.text_area("كلمات البراند", "almaster, المستر, ماستر")
+        brands_list = [x.strip() for x in brands_input.split(',')]
+
+# Auth Flow
+if uploaded_file:
+    flow = InstalledAppFlow.from_client_secrets_file(uploaded_file, ['https://www.googleapis.com/auth/webmasters.readonly'])
+    flow.redirect_uri = "urn:ietf:wg:oauth:2.0:oob"
+    auth_url, _ = flow.authorization_url()
     
-    site_url = st.text_input("رابط الموقع (GSC Property)", value="sc-domain:almaster.tech")
-    days = st.slider("فترة التحليل (أيام)", 7, 90, 30)
-    brands = st.text_area("كلمات البراند (للحماية)", "almaster, المستر, ماستر")
+    if 'creds' not in st.session_state:
+        st.info("👋 يرجى المصادقة للبدء")
+        st.markdown(f"[**👉 اضغط هنا للحصول على كود المصادقة**]({auth_url})")
+        auth_code = st.text_input("أدخل الكود هنا:")
+        
+        if auth_code:
+            service = authenticate_gsc(auth_code, uploaded_file)
+            if service:
+                st.session_state.creds = service
+                st.rerun()
+            else:
+                st.error("كود خاطئ! حاول مجدداً برابط جديد.")
+
+# Main Dashboard
+if 'creds' in st.session_state:
+    service = st.session_state.creds
     
     if st.button("🚀 بدء الفحص الشامل"):
-        st.session_state.audit_started = True
-
-# Main Content Area
-if st.session_state.audit_started:
-    if not uploaded_secret:
-        st.warning("⚠️ يرجى رفع ملف المصادقة من القائمة الجانبية أولاً.")
-    else:
-        service = authenticate_gsc(uploaded_secret)
-        
-        if service:
-            with st.spinner('⏳ جاري الاتصال بجوجل وسحب البيانات...'):
-                end_date = datetime.date.today()
-                start_date = end_date - datetime.timedelta(days=days)
-                req = {'startDate': start_date.isoformat(), 'endDate': end_date.isoformat(), 
-                       'dimensions': ['query', 'page'], 'rowLimit': 25000}
-                try:
-                    resp = service.searchanalytics().query(siteUrl=site_url, body=req).execute()
-                    rows = resp.get('rows', [])
-                except Exception as e:
-                    st.error(f"حدث خطأ أثناء الاتصال: {e}")
-                    rows = []
-
-            if rows:
+        with st.spinner("جاري سحب وتحليل البيانات..."):
+            raw_data = fetch_all_data(service, site_url, days)
+            
+            if raw_data:
                 df_raw = pd.DataFrame([{
                     'query': r['keys'][0], 'page': r['keys'][1],
                     'clicks': r['clicks'], 'impressions': r['impressions'],
-                    'ctr': r['ctr'], 'position': r['position']
-                } for r in rows])
+                    'position': r['position']
+                } for r in raw_data])
                 
-                with st.spinner('🧠 جاري تحليل التضارب بالذكاء الاصطناعي...'):
-                    report = run_analysis(df_raw, [x.strip() for x in brands.split(',')])
-                
-                if not report.empty:
-                    report = report.sort_values(by=['Priority_Score'], ascending=False)
-                    
-                    # Summary Cards
-                    c1, c2, c3 = st.columns(3)
-                    c1.metric("مشاكل التضارب", len(report))
-                    c2.metric("حالات حرجة جداً 🔥", len(report[report['Severity'] == "🔥 Critical"]))
-                    c3.metric("زيارات ضائعة (تقديري)", f"{report['Est_Traffic_Loss'].sum():,}")
-                    
-                    st.markdown("### 📋 النتائج التفصيلية")
-                    
-                    # Styling the dataframe for maximum readability
-                    st.dataframe(
-                        report.style.applymap(lambda x: 'color: #ff4b4b; font-weight: bold' if x == '🔥 Critical' else '', subset=['Severity'])
-                                    .format({'Overlap': "{:.1f}%", 'Winner_CTR': "{:.1f}%"}),
-                        use_container_width=True,
-                        height=500
-                    )
-                    
-                    csv = report.to_csv(index=False).encode('utf-8')
-                    st.download_button("📥 تحميل التقرير الكامل (Excel)", csv, "seo_audit.csv", "text/csv")
-                else:
-                    st.balloons()
-                    st.success("✅ أداء الموقع ممتاز! لا يوجد أي تضارب (Cannibalization) في الكلمات.")
+                report_df = run_full_analysis(df_raw, brands_list)
+                st.session_state.report = report_df
             else:
-                st.info("ℹ️ لا توجد بيانات مسجلة في Search Console لهذا النطاق في الفترة المحددة.")
+                st.warning("لا توجد بيانات!")
+
+    # Results View
+    if 'report' in st.session_state:
+        df = st.session_state.report
+        
+        # --- Filters ---
+        st.markdown("---")
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            sev_filter = st.multiselect("تصفية حسب الخطورة", df['Severity'].unique(), default=['Critical', 'High'])
+        with c2:
+            act_filter = st.multiselect("تصفية حسب الإجراء", df['Action'].unique())
+        with c3:
+            market_filter = st.multiselect("تصفية حسب السوق", df['Market'].unique())
+            
+        # Apply Filters
+        if sev_filter: df = df[df['Severity'].isin(sev_filter)]
+        if act_filter: df = df[df['Action'].isin(act_filter)]
+        if market_filter: df = df[df['Market'].isin(market_filter)]
+        
+        # Metrics
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("الكلمات المتضاربة", len(df))
+        m2.metric("حالات حرجة", len(df[df['Severity']=='Critical']))
+        m3.metric("زيارات ضائعة", f"{df['Traffic_Loss'].sum():,}")
+        m4.metric("فرص دمج المحتوى", len(df[df['Action']=='Merge / 301']))
+        
+        # Data Table with Formatting
+        st.subheader("📋 تقرير التضارب التفصيلي")
+        
+        def highlight_severity(s):
+            return ['background-color: #450a0a' if v == 'Critical' else '' for v in s]
+
+        st.dataframe(
+            df.style.apply(highlight_severity, subset=['Severity'])
+              .format({'Overlap': "{:.1f}%", 'Traffic_Loss': "{:,}"}),
+            use_container_width=True,
+            height=600
+        )
+        
+        # Excel Export
+        excel_data = to_excel(df)
+        st.download_button(
+            label="📥 تحميل التقرير (Excel XLSX)",
+            data=excel_data,
+            file_name=f'Cannibalization_Report_{datetime.date.today()}.xlsx',
+            mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+
 else:
-    # Welcome / Empty State
-    st.markdown("""
-    <div style="background:rgba(255,255,255,0.05); padding:40px; border-radius:20px; text-align:center; margin-top:50px;">
-        <h2>👋 مرحبًا بك في نظام تحليل التضارب</h2>
-        <p>ابدأ بضبط الإعدادات من القائمة الجانبية ثم اضغط على زر "بدء الفحص".</p>
-    </div>
-    """, unsafe_allow_html=True)
+    if not uploaded_file:
+        st.warning("⬅️ ابدأ برفع ملف client_secret.json من القائمة الجانبية.")
