@@ -66,7 +66,7 @@ st.markdown("""
 st.markdown("""
 <div style="text-align: center; margin-bottom: 30px; background: rgba(0,0,0,0.3); padding: 20px; border-radius: 15px;">
     <h1 style="color:white; margin:0;">ALMASTER <span style="color:#38bdf8;">TECH</span></h1>
-    <p style="color:#94a3b8; font-size:16px;">SEO Command Center v15.0</p>
+    <p style="color:#94a3b8; font-size:16px;">SEO Command Center v16.0 (Stable)</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -76,12 +76,13 @@ st.markdown("""
 class Config:
     SEVERITY_CRITICAL = 0.8
     SEVERITY_HIGH = 0.5
+    SEVERITY_MEDIUM = 0.3 # Added missing constant
+    
     MIN_IMP_QUANTILE = 0.2
     MIN_IMP_ABSOLUTE = 10
     MAX_DEPTH_PENALTY = 6
     WEIGHTS = {'clicks': 0.4, 'pos': 0.3, 'imps': 0.2, 'depth': 0.1}
     
-    # Enhanced NLP Patterns
     URL_PATTERNS = {
         'Commercial': {'terms': ['/product', '/service', '/shop', 'cart', 'checkout', '/pricing', 'booking', 'store'], 'weight': 3},
         'Informational': {'terms': ['/blog', '/news', '/article', '/guide', '/wiki', 'learn', '/tag/', '/doctor/', 'faq'], 'weight': 2}
@@ -111,12 +112,10 @@ def create_pdf_report(df, site_url):
     critical = df[df['Severity'] == 'Critical']
     pdf.set_font("Arial", 'B', 10)
     pdf.cell(0, 10, f"Critical Issues Found: {len(critical)}", ln=1)
-    pdf.cell(0, 10, f"Total Traffic Loss: {df['Est_Traffic_Loss'].sum()}", ln=1)
     
     pdf.ln(10)
     pdf.set_font("Arial", size=8)
     
-    # Simple Table
     col_width = 45
     row_height = 6
     headers = ['Query', 'Market', 'Winner', 'Loser']
@@ -124,17 +123,21 @@ def create_pdf_report(df, site_url):
         pdf.cell(col_width, row_height, h, border=1)
     pdf.ln(row_height)
     
-    for _, row in critical.head(20).iterrows(): # Top 20 only for PDF
-        pdf.cell(col_width, row_height, str(row['Query'])[:25], border=1)
-        pdf.cell(col_width, row_height, str(row['Market']), border=1)
-        pdf.cell(col_width, row_height, str(row['Winner'])[-20:], border=1)
-        pdf.cell(col_width, row_height, str(row['Loser'])[-20:], border=1)
+    # Ensure strings are latin-1 compatible for FPDF or strip characters
+    def clean_text(text):
+        return str(text).encode('latin-1', 'ignore').decode('latin-1')
+
+    for _, row in critical.head(20).iterrows(): 
+        pdf.cell(col_width, row_height, clean_text(row['Query'])[:25], border=1)
+        pdf.cell(col_width, row_height, clean_text(row['Market']), border=1)
+        pdf.cell(col_width, row_height, clean_text(row['Winner'])[-20:], border=1)
+        pdf.cell(col_width, row_height, clean_text(row['Loser'])[-20:], border=1)
         pdf.ln(row_height)
         
     return pdf.output(dest='S').encode('latin-1', 'ignore')
 
 # ==========================================
-# 🧠 3. CORE LOGIC (Vectorized & Multi-Page)
+# 🧠 3. CORE LOGIC
 # ==========================================
 def identify_market_segment(url, default_lang="EN"):
     try:
@@ -189,7 +192,6 @@ def authenticate_gsc(auth_code):
         return None
 
 def get_site_list(service):
-    """Fetch all verified properties from GSC"""
     try:
         site_list = service.sites().list().execute()
         return [s['siteUrl'] for s in site_list.get('siteEntry', [])]
@@ -243,24 +245,21 @@ def run_analysis(df_raw, brands, default_lang):
     
     report = []
     
-    # Group by Query+Market and find ALL conflicts (not just top loser)
     groups = df.groupby('query_market')
     
     for qm, group in groups:
         if len(group) < 2: continue
         
-        # Sort pages by score
         group = group.sort_values('score', ascending=False)
         winner = group.iloc[0]
         losers = group.iloc[1:]
         
-        # Filter insignificant losers (low impressions)
+        # Filter insignificant losers
         min_imp_check = max(group['impressions'].max() * 0.05, 5)
         significant_losers = losers[losers['impressions'] >= min_imp_check]
         
         if significant_losers.empty: continue
         
-        # Iterate over ALL significant losers
         for _, loser in significant_losers.iterrows():
             overlap = loser['score'] / winner['score']
             is_brand = any(b in winner['query'] for b in brands)
@@ -277,9 +276,12 @@ def run_analysis(df_raw, brands, default_lang):
             action = "Merge / 301" if severity == "Critical" and reason != "Intent Mismatch" else "Split Intent"
             if severity == "Low": action = "Monitor"
             
-            traffic_loss = int(loser['impressions'] * (winner['ctr']/100)) # Potential loss
+            # --- FIX: Ensure winner['ctr'] exists ---
+            # Dataframes from GSC API have 'ctr' (ratio 0-1) or percentage.
+            # Usually 'ctr' in raw GSC data is float (e.g. 0.05 for 5%).
+            # We multiply by 100 for display, but here we use it for calc.
+            traffic_loss = int(loser['impressions'] * winner['ctr']) # Potential loss
             
-            # Priority
             sev_pts = {"Critical": 40, "High": 25, "Medium": 10}.get(severity, 5)
             tf_pts = min(math.log(traffic_loss+1)*10, 50)
             priority = int(min(tf_pts + sev_pts + (10 if is_brand else 0), 100))
@@ -310,11 +312,9 @@ with st.sidebar:
     
     st.markdown("---")
     
-    # 1. Auth & Site Selection
     if 'creds' in st.session_state:
         st.success("✅ متصل بـ GSC")
         
-        # Fetch Sites Button
         if 'sites' not in st.session_state:
             with st.spinner("جلب قائمة المواقع..."):
                 st.session_state.sites = get_site_list(st.session_state.creds)
@@ -328,9 +328,9 @@ with st.sidebar:
         st.warning("يرجى المصادقة أولاً")
         selected_site = None
 
-    # Settings
     days = st.slider("فترة التحليل", 7, 90, 30)
-    default_lang = st.radio("اللغة الافتراضية", ["AR", "EN"])
+    # Updated Label
+    default_lang = st.radio("اللغة الاحتياطية (للحالات الغامضة)", ["AR", "EN"])
     
     with st.expander("🔔 إعدادات التنبيهات (Slack)"):
         slack_webhook = st.text_input("Slack Webhook URL", placeholder="https://hooks.slack.com/...")
@@ -365,9 +365,13 @@ if 'creds' in st.session_state and selected_site:
         with st.spinner(f"جاري تحليل {selected_site}..."):
             raw = fetch_gsc_data(st.session_state.creds, selected_site, days)
             if raw:
+                # --- BUG FIX: Added 'ctr' here ---
                 df_raw = pd.DataFrame([{
-                    'query': r['keys'][0], 'page': r['keys'][1],
-                    'clicks': r['clicks'], 'impressions': r['impressions'],
+                    'query': r['keys'][0], 
+                    'page': r['keys'][1],
+                    'clicks': r['clicks'], 
+                    'impressions': r['impressions'],
+                    'ctr': r['ctr'], # Fixed missing column
                     'position': r['position']
                 } for r in raw])
                 
@@ -375,7 +379,6 @@ if 'creds' in st.session_state and selected_site:
                     report = run_analysis(df_raw, brands, default_lang)
                     st.session_state.report = report
                     
-                    # Slack Alert
                     critical_count = len(report[report['Severity']=='Critical'])
                     if critical_count > 0 and slack_webhook:
                         send_slack_alert(slack_webhook, critical_count, selected_site)
@@ -386,14 +389,12 @@ if 'creds' in st.session_state and selected_site:
 if 'report' in st.session_state:
     df = st.session_state.report
     
-    # Top Metrics
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("🔴 تضارب حرج", len(df[df['Severity']=='Critical']))
     c2.metric("⚠️ تضارب عالى", len(df[df['Severity']=='High']))
     c3.metric("📉 زيارات مهددة", f"{df['Traffic_Loss'].sum():,}")
     c4.metric("📄 صفحات متأثرة", df['Loser'].nunique())
     
-    # Filters
     st.markdown("---")
     col1, col2 = st.columns(2)
     with col1:
@@ -411,21 +412,18 @@ if 'report' in st.session_state:
         height=500
     )
     
-    # Exports
     col_dl1, col_dl2 = st.columns(2)
     
-    # Excel
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         filtered_df.to_excel(writer, index=False)
     col_dl1.download_button("📥 Excel Report", output.getvalue(), "seo_audit.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     
-    # PDF
     try:
         pdf_bytes = create_pdf_report(filtered_df, selected_site)
         col_dl2.download_button("📄 PDF Summary", pdf_bytes, "seo_summary.pdf", "application/pdf")
     except Exception as e:
-        col_dl2.warning("PDF غير متاح (Check Fonts)")
+        col_dl2.warning("PDF غير متاح حالياً (Font Issue)")
 
 else:
     if 'creds' in st.session_state:
