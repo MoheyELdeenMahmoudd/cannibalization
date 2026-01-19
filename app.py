@@ -6,17 +6,17 @@ import re
 import os
 import datetime
 import io
+import urllib.parse
 from urllib.parse import urlparse
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials
 
 # ==========================================
-# 🎨 1. UI/UX CONFIGURATION (Fixed RTL)
+# 🎨 1. UI/UX CONFIGURATION
 # ==========================================
 st.set_page_config(page_title="Almaster Tech - SEO Suite", page_icon="🚀", layout="wide")
 
-# Custom CSS for Professional Look & RTL Fixes
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap');
@@ -24,40 +24,42 @@ st.markdown("""
     html, body, [class*="css"] { font-family: 'Cairo', sans-serif !important; }
     
     .stApp {
-        background: linear-gradient(to bottom, #020024, #090979, #00d4ff);
+        background: linear-gradient(to bottom, #0f172a, #1e293b, #0f172a);
         background-size: cover;
         background-attachment: fixed;
     }
 
-    /* RTL Handling */
+    /* RTL Alignment */
     p, h1, h2, h3, h4, h5, h6, .stMarkdown, .stRadio, .stSelectbox label, .stTextInput label, .stTextArea label {
         direction: rtl; 
         text-align: right;
     }
     
-    .st-emotion-cache-16txtl3 { direction: ltr; } 
-    .st-emotion-cache-16txtl3 p { direction: rtl; } 
+    div[data-testid="stExpander"] details summary {
+        flex-direction: row-reverse;
+        text-align: right;
+    }
 
     /* Metrics Cards */
     div[data-testid="stMetric"] {
-        background: rgba(255, 255, 255, 0.1);
+        background: rgba(255, 255, 255, 0.05);
         backdrop-filter: blur(10px);
-        border: 1px solid rgba(255,255,255,0.2);
+        border: 1px solid rgba(255,255,255,0.1);
         border-radius: 12px;
         padding: 15px;
         text-align: center;
         direction: rtl;
     }
-    div[data-testid="stMetricValue"] { color: #ffffff; font-size: 28px; text-shadow: 0 0 10px rgba(0,0,0,0.5); }
-    div[data-testid="stMetricLabel"] { color: #e2e8f0; }
+    div[data-testid="stMetricValue"] { color: #3b82f6; font-size: 28px; font-weight: 800; }
+    div[data-testid="stMetricLabel"] { color: #cbd5e1; }
 
     /* Buttons */
     .stButton>button {
-        background: linear-gradient(90deg, #2F45FF, #2563eb);
+        background: linear-gradient(90deg, #2563eb, #3b82f6);
         color: white; border: none; border-radius: 8px; font-weight: bold;
         transition: 0.3s; height: 50px;
     }
-    .stButton>button:hover { transform: scale(1.02); box-shadow: 0 0 15px rgba(47, 69, 255, 0.5); color:white; }
+    .stButton>button:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(37, 99, 235, 0.4); }
 
     .stDataFrame { direction: ltr; } 
 </style>
@@ -65,17 +67,16 @@ st.markdown("""
 
 # Header
 st.markdown("""
-<div style="text-align: center; margin-bottom: 30px; background: rgba(0,0,0,0.3); padding: 20px; border-radius: 15px;">
-    <h1 style="color:white; margin:0; text-shadow: 0 0 20px #2F45FF;">ALMASTER <span style="color:#00d4ff;">TECH</span></h1>
-    <p style="color:#cbd5e1; font-size:16px;">Enterprise SEO Cannibalization System v12.0</p>
+<div style="text-align: center; margin-bottom: 30px; background: rgba(0,0,0,0.2); padding: 20px; border-radius: 15px;">
+    <h1 style="color:white; margin:0;">ALMASTER <span style="color:#3b82f6;">TECH</span></h1>
+    <p style="color:#94a3b8; font-size:16px;">Enterprise SEO Cannibalization System v14.0</p>
 </div>
 """, unsafe_allow_html=True)
 
 # ==========================================
-# ⚙️ 2. LOGIC CONFIGURATION (Fixed Missing Constants)
+# ⚙️ 2. LOGIC CONFIGURATION
 # ==========================================
 class Config:
-    # --- Missing Constants Added Here ---
     SEVERITY_CRITICAL = 0.8
     SEVERITY_HIGH = 0.5
     SEVERITY_MEDIUM = 0.3
@@ -87,27 +88,30 @@ class Config:
     EXPECTED_CTR = {1: 30.0, 2: 15.0, 3: 10.0, 4: 7.0, 5: 5.0, 6: 3.5, 7: 3.0, 8: 2.5, 9: 2.0, 10: 1.5}
     URL_PATTERNS = {
         'Commercial': {'terms': ['/product', '/service', '/shop', 'cart', 'checkout', '/pricing'], 'weight': 3},
-        'Informational': {'terms': ['/blog', '/news', '/article', '/guide', '/wiki', 'learn'], 'weight': 2}
+        'Informational': {'terms': ['/blog', '/news', '/article', '/guide', '/wiki', 'learn', '/tag/', '/doctor/'], 'weight': 2}
     }
-    COMM_TERMS = ['buy', 'price', 'cost', 'service', 'company', 'agency', 'hire', 'شراء', 'سعر', 'تكلفة', 'شركة', 'خدمة']
-    INFO_TERMS = ['how', 'what', 'guide', 'tutorial', 'tips', 'why', 'review', 'vs', 'best', 'كيف', 'دليل', 'شرح', 'نصائح']
+    COMM_TERMS = ['buy', 'price', 'cost', 'service', 'company', 'agency', 'hire', 'شراء', 'سعر', 'تكلفة', 'شركة', 'خدمة', 'عيادة', 'دكتور', 'حجز']
+    INFO_TERMS = ['how', 'what', 'guide', 'tutorial', 'tips', 'why', 'review', 'vs', 'best', 'كيف', 'دليل', 'شرح', 'نصائح', 'علاج', 'أعراض', 'اسباب']
 
 # ==========================================
-# 🧠 3. ADVANCED LOGIC FUNCTIONS
+# 🧠 3. SMART LOGIC FUNCTIONS
 # ==========================================
-def identify_market_segment(url):
+def identify_market_segment(url, default_lang="EN"):
     try:
-        path = urlparse(str(url)).path.strip('/').split('/')
+        decoded_url = urllib.parse.unquote(str(url))
+        path = urlparse(decoded_url).path.strip('/').split('/')
         first = path[0].lower() if path else ""
+        
         if re.match(r'^[a-z]{2}-[a-z]{2}$', first): return first.upper()
         if re.match(r'^[a-z]{2}$', first): return f"Global-{first.upper()}"
-        return "Global-EN"
+        if re.search(r'[\u0600-\u06FF]', decoded_url): return "Global-AR"
+        return f"Global-{default_lang}"
     except: return "Unknown"
 
 def detect_intents_vectorized(df):
     q_lower = df['query'].str.lower()
-    url_lower = df['page_clean'].str.lower()
-    
+    url_decoded = df['page_clean'].apply(lambda x: urllib.parse.unquote(str(x)).lower())
+
     c_mask = q_lower.apply(lambda x: any(t in x for t in Config.COMM_TERMS))
     i_mask = q_lower.apply(lambda x: any(t in x for t in Config.INFO_TERMS))
     
@@ -119,9 +123,9 @@ def detect_intents_vectorized(df):
     
     p_intent = pd.Series('General', index=df.index)
     for term in Config.URL_PATTERNS['Informational']['terms']:
-        p_intent[url_lower.str.contains(term, regex=False)] = 'Informational'
+        p_intent[url_decoded.str.contains(term, regex=False)] = 'Informational'
     for term in Config.URL_PATTERNS['Commercial']['terms']:
-        p_intent[url_lower.str.contains(term, regex=False)] = 'Commercial'
+        p_intent[url_decoded.str.contains(term, regex=False)] = 'Commercial'
         
     df['p_intent'] = p_intent
     return df
@@ -149,7 +153,6 @@ def calculate_score_vectorized(df):
 # ==========================================
 @st.cache_resource
 def authenticate_gsc(auth_code):
-    # Note: We rely on the file being present as "client_secret.json"
     SCOPES = ['https://www.googleapis.com/auth/webmasters.readonly']
     try:
         flow = InstalledAppFlow.from_client_secrets_file("client_secret.json", SCOPES)
@@ -211,19 +214,23 @@ def to_excel(df):
         worksheet.conditional_format(1, sev_col_idx, len(df), sev_col_idx, {
             'type': 'text', 'criteria': 'containing', 'value': 'Critical', 'format': critical_fmt
         })
-        worksheet.set_column(0, 15, 20)
+        worksheet.set_column(0, 0, 15) # Market
+        worksheet.set_column(1, 1, 30) # Query
+        worksheet.set_column(4, 4, 25) # Reason
+        worksheet.set_column(8, 8, 50) # Winner
+        worksheet.set_column(10, 10, 50) # Loser
     return output.getvalue()
 
 # ==========================================
 # 📊 5. ANALYSIS ENGINE
 # ==========================================
 @st.cache_data(show_spinner=False)
-def run_full_analysis(df_raw, brands):
+def run_full_analysis(df_raw, brands, default_lang):
     df = df_raw.copy()
     df.columns = [c.lower() for c in df.columns]
     
     df['page_clean'] = df['page'].astype(str).str.split('?').str[0].str.split('#').str[0].str.rstrip('/')
-    df['market'] = df['page_clean'].apply(identify_market_segment)
+    df['market'] = df['page_clean'].apply(lambda x: identify_market_segment(x, default_lang))
     
     df = detect_intents_vectorized(df)
     
@@ -257,28 +264,57 @@ def run_full_analysis(df_raw, brands):
         is_brand = any(b in winner['query'] for b in brands)
         severity_score = overlap * (1.2 if is_brand else 1.0)
         
-        # --- FIXED: Use Config Constants ---
+        # Severity
         severity = "Low"
         if severity_score > Config.SEVERITY_CRITICAL: severity = "Critical"
         elif severity_score > Config.SEVERITY_HIGH: severity = "High"
         elif severity_score > Config.SEVERITY_MEDIUM: severity = "Medium"
         
-        action = "Monitor"
-        if winner['p_intent'] == top_loser['p_intent'] and severity == "Critical": action = "Merge / 301"
-        elif winner['p_intent'] != top_loser['p_intent']: action = "Split Intent"
+        # --- NEW: Reason Logic ---
+        reason = "Unknown"
+        if winner['p_intent'] != top_loser['p_intent']:
+            reason = "Intent Mismatch (اختلاف نية)"
+        elif winner['p_intent'] == top_loser['p_intent']:
+            reason = "Duplicate Content (تكرار محتوى)"
         
+        if is_brand:
+            reason = "Brand Conflict (تضارب براند)"
+
+        # Action & Difficulty
+        action = "Monitor"
+        difficulty = "Low"
+        
+        if severity == "Critical":
+            if reason == "Intent Mismatch (اختلاف نية)":
+                action = "Split Intent (فصل المحتوى)"
+                difficulty = "High"
+            else:
+                action = "Merge / 301 (دمج)"
+                difficulty = "Low"
+        
+        # Metrics
         wasted_imps = losers['impressions'].sum()
         traffic_loss = int(wasted_imps * (winner['ctr'] / 100))
         
+        # Priority Score
+        sev_points = {"Critical": 40, "High": 25, "Medium": 10, "Low": 5}.get(severity, 5)
+        traffic_factor = min(math.log(wasted_imps + 1) * 10, 50)
+        brand_points = 10 if is_brand else 0
+        priority_score = int(min(traffic_factor + sev_points + brand_points, 100))
+        
         report.append({
-            'Query': winner['query'],
             'Market': winner['market'],
+            'Query': winner['query'],
             'Severity': severity,
+            'Priority_Score': priority_score,
+            'Reason': reason, # New Column
+            'Action_Plan': action,
+            'Difficulty': difficulty,
+            'Est_Traffic_Loss': traffic_loss,
             'Winner': winner['page_clean'],
+            'Winner_CTR': round(winner['ctr'], 2),
             'Loser': top_loser['page_clean'],
-            'Overlap': round(overlap * 100, 1),
-            'Traffic_Loss': traffic_loss,
-            'Action': action
+            'Overlap': round(overlap * 100, 1)
         })
         
     return pd.DataFrame(report)
@@ -291,16 +327,16 @@ with st.sidebar:
     uploaded_file = st.file_uploader("ملف المصادقة (JSON)", type="json")
     
     with st.expander("🔗 إعدادات الاتصال", expanded=True):
-        site_url = st.text_input("GSC Property", "sc-domain:almaster.tech", help="تأكد من كتابة sc-domain: للنطاقات")
+        site_url = st.text_input("GSC Property", "sc-domain:almaster.tech")
         days = st.slider("فترة التحليل", 7, 90, 30)
-    
+        default_lang_choice = st.radio("اللغة الافتراضية", ["AR", "EN"], index=0)
+
     with st.expander("🛡️ إعدادات البراند"):
         brands_input = st.text_area("كلمات البراند", "almaster, المستر, ماستر")
         brands_list = [x.strip() for x in brands_input.split(',')]
 
 # Auth Flow
 if uploaded_file:
-    # --- FIXED: Save file properly before passing to flow ---
     with open("client_secret.json", "wb") as f:
         f.write(uploaded_file.getbuffer())
         
@@ -323,7 +359,7 @@ if uploaded_file:
                 st.session_state.creds = service
                 st.rerun()
             else:
-                st.error("❌ كود خاطئ أو منتهي الصلاحية! حاول مجدداً.")
+                st.error("❌ كود خاطئ!")
 
 if 'creds' in st.session_state:
     service = st.session_state.creds
@@ -340,7 +376,7 @@ if 'creds' in st.session_state:
                 } for r in raw_data])
                 
                 with st.spinner("🤖 جاري تحليل التضارب..."):
-                    report_df = run_full_analysis(df_raw, brands_list)
+                    report_df = run_full_analysis(df_raw, brands_list, default_lang_choice)
                     st.session_state.report = report_df
             else:
                 st.warning("⚠️ لا توجد بيانات!")
@@ -353,19 +389,19 @@ if 'creds' in st.session_state:
         with c1:
             sev_filter = st.multiselect("تصفية حسب الخطورة", df['Severity'].unique(), default=['Critical', 'High'])
         with c2:
-            act_filter = st.multiselect("تصفية حسب الإجراء", df['Action'].unique())
-        with c3:
             market_filter = st.multiselect("تصفية حسب السوق", df['Market'].unique())
+        with c3:
+            reason_filter = st.multiselect("تصفية حسب السبب", df['Reason'].unique()) # New Filter
             
         if sev_filter: df = df[df['Severity'].isin(sev_filter)]
-        if act_filter: df = df[df['Action'].isin(act_filter)]
         if market_filter: df = df[df['Market'].isin(market_filter)]
+        if reason_filter: df = df[df['Reason'].isin(reason_filter)]
         
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("🔍 الكلمات المتضاربة", len(df))
         m2.metric("🔥 حالات حرجة", len(df[df['Severity']=='Critical']))
-        m3.metric("📉 زيارات ضائعة", f"{df['Traffic_Loss'].sum():,}")
-        m4.metric("🛠️ فرص دمج", len(df[df['Action']=='Merge / 301']))
+        m3.metric("📉 زيارات ضائعة", f"{df['Est_Traffic_Loss'].sum():,}")
+        m4.metric("🧠 اختلاف نية البحث", len(df[df['Reason'].str.contains("Intent")]))
         
         st.subheader("📋 تقرير التضارب التفصيلي")
         
@@ -374,7 +410,7 @@ if 'creds' in st.session_state:
 
         st.dataframe(
             df.style.apply(highlight_row, axis=1)
-              .format({'Overlap': "{:.1f}%", 'Traffic_Loss': "{:,}"}),
+              .format({'Overlap': "{:.1f}%", 'Winner_CTR': "{:.1f}%", 'Est_Traffic_Loss': "{:,}"}),
             use_container_width=True,
             height=600
         )
