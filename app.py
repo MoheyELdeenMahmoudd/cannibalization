@@ -1,440 +1,356 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import math
-import re
-import os
-import datetime
 import io
-import requests
+import datetime
+import re
 import urllib.parse
 from urllib.parse import urlparse
-from fpdf import FPDF
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
-from google.oauth2.credentials import Credentials
 
 # ==========================================
-# 🎨 1. UI/UX CONFIGURATION
+# 🎨 1. UI CONFIGURATION & STYLING
 # ==========================================
-st.set_page_config(page_title="Almaster Tech - SEO Command Center", page_icon="🛸", layout="wide")
+st.set_page_config(page_title="Almaster Tech | SEO Command Center", page_icon="🦁", layout="wide")
 
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap');
-    
     html, body, [class*="css"] { font-family: 'Cairo', sans-serif !important; }
     
-    .stApp {
-        background: linear-gradient(to bottom, #0f172a, #1e293b, #0f172a);
-        color: white;
-    }
-
-    /* RTL */
-    p, h1, h2, h3, h4, h5, h6, .stMarkdown, .stRadio, .stSelectbox label, .stTextInput label, .stTextArea label {
-        direction: rtl; 
-        text-align: right;
+    .stApp { background-color: #0e1117; color: #ffffff; }
+    
+    /* Custom Headers */
+    .header-box {
+        background: linear-gradient(90deg, #1e293b, #0f172a);
+        padding: 20px; border-radius: 12px; border-left: 5px solid #38bdf8;
+        margin-bottom: 25px; text-align: center;
     }
     
-    div[data-testid="stExpander"] details summary {
-        flex-direction: row-reverse;
-        text-align: right;
-    }
-
-    /* Cards */
+    /* Metrics */
     div[data-testid="stMetric"] {
-        background: rgba(255, 255, 255, 0.05);
-        border: 1px solid rgba(255,255,255,0.1);
-        border-radius: 12px;
-        padding: 15px;
-        text-align: center;
-        direction: rtl;
+        background-color: #1f2937; border: 1px solid #374151;
+        border-radius: 10px; padding: 15px; direction: rtl;
     }
-    div[data-testid="stMetricValue"] { color: #38bdf8; font-size: 26px; }
-
-    /* Buttons */
-    .stButton>button {
-        background: linear-gradient(90deg, #0ea5e9, #2563eb);
-        color: white; border: none; height: 50px; font-weight: bold;
-    }
-
-    .stDataFrame { direction: ltr; } 
+    
+    /* Dataframes */
+    .stDataFrame { border: 1px solid #374151; border-radius: 5px; }
+    
+    /* RTL Adjustments */
+    .rtl { direction: rtl; text-align: right; }
+    .stSelectbox, .stTextInput, .stSlider { direction: rtl; }
 </style>
 """, unsafe_allow_html=True)
 
 # Header
 st.markdown("""
-<div style="text-align: center; margin-bottom: 30px; background: rgba(0,0,0,0.3); padding: 20px; border-radius: 15px;">
+<div class="header-box">
     <h1 style="color:white; margin:0;">ALMASTER <span style="color:#38bdf8;">TECH</span></h1>
-    <p style="color:#94a3b8; font-size:16px;">SEO Command Center v17.0 (Clean Data)</p>
+    <p style="color:#94a3b8; font-size:16px;">Advanced Cannibalization Logic Engine v2.0</p>
 </div>
 """, unsafe_allow_html=True)
 
 # ==========================================
-# ⚙️ 2. CONFIG & HELPERS
+# ⚙️ 2. ADVANCED CONFIGURATION
 # ==========================================
 class Config:
-    SEVERITY_CRITICAL = 0.8
-    SEVERITY_HIGH = 0.5
-    SEVERITY_MEDIUM = 0.3
+    # Logic Thresholds
+    DOMINANCE_TOP_POS = 3.5  # If winner is better than this...
+    DOMINANCE_SECOND_POS = 6.0 # And loser is better than this... It's Dominance.
     
-    MIN_IMP_QUANTILE = 0.2
-    MIN_IMP_ABSOLUTE = 10
-    MAX_DEPTH_PENALTY = 6
-    WEIGHTS = {'clicks': 0.4, 'pos': 0.3, 'imps': 0.2, 'depth': 0.1}
+    MIN_IMPRESSIONS = 20     # Ignore noise
+    MIN_CLICKS = 0           # Can detect issues even with 0 clicks if impressions are high
     
-    URL_PATTERNS = {
-        'Commercial': {'terms': ['/product', '/service', '/shop', 'cart', 'checkout', '/pricing', 'booking', 'store'], 'weight': 3},
-        'Informational': {'terms': ['/blog', '/news', '/article', '/guide', '/wiki', 'learn', '/tag/', '/doctor/', 'faq'], 'weight': 2}
-    }
-    COMM_TERMS = ['buy', 'price', 'cost', 'service', 'company', 'agency', 'hire', 'شراء', 'سعر', 'تكلفة', 'شركة', 'خدمة', 'عيادة', 'دكتور', 'حجز', 'متجر', 'طلب']
-    INFO_TERMS = ['how', 'what', 'guide', 'tutorial', 'tips', 'why', 'review', 'vs', 'best', 'كيف', 'دليل', 'شرح', 'نصائح', 'علاج', 'أعراض', 'اسباب', 'معلومات', 'خطوات']
+    # Intent Dictionaries (Expanded)
+    COMM_TERMS = ['buy', 'price', 'cost', 'service', 'hire', 'agency', 'shop', 'store', 
+                  'شراء', 'سعر', 'اسعار', 'تكلفة', 'خدمة', 'شركة', 'وكالة', 'متجر', 'طلب', 'حجز', 'عيادة', 'دكتور']
+    
+    INFO_TERMS = ['how', 'what', 'guide', 'tips', 'best', 'review', 'vs', 'difference', 'signs', 'symptoms',
+                  'كيف', 'ما هو', 'دليل', 'شرح', 'نصائح', 'افضل', 'مقارنة', 'الفرق', 'اعراض', 'علاج', 'اسباب', 'طريقة']
 
-def send_slack_alert(webhook_url, critical_count, site_url):
-    if not webhook_url: return
-    payload = {
-        "text": f"🚨 *Critical SEO Alert for {site_url}*\nFound *{critical_count}* critical cannibalization issues requiring immediate attention."
-    }
-    try:
-        requests.post(webhook_url, json=payload)
-        st.toast("تم إرسال تنبيه Slack بنجاح!", icon="🔔")
-    except:
-        st.toast("فشل إرسال تنبيه Slack", icon="❌")
+# ==========================================
+# 🧠 3. CORE LOGIC ENGINE (THE BRAIN)
+# ==========================================
 
-def create_pdf_report(df, site_url):
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", size=12)
-    pdf.cell(200, 10, txt=f"SEO Cannibalization Report: {site_url}", ln=1, align='C')
-    pdf.cell(200, 10, txt=f"Date: {datetime.date.today()}", ln=2, align='C')
-    pdf.ln(10)
+def get_page_intent(url, query):
+    """Detects intent based on URL structure and Query terms."""
+    url_lower = str(url).lower()
+    query_lower = str(query).lower()
     
-    critical = df[df['Severity'] == 'Critical']
-    pdf.set_font("Arial", 'B', 10)
-    pdf.cell(0, 10, f"Critical Issues Found: {len(critical)}", ln=1)
+    score_comm = 0
+    score_info = 0
     
-    pdf.ln(10)
-    pdf.set_font("Arial", size=8)
+    # Check Query
+    if any(t in query_lower for t in Config.COMM_TERMS): score_comm += 2
+    if any(t in query_lower for t in Config.INFO_TERMS): score_info += 2
     
-    col_width = 45
-    row_height = 6
-    headers = ['Query', 'Market', 'Winner', 'Loser']
-    for h in headers:
-        pdf.cell(col_width, row_height, h, border=1)
-    pdf.ln(row_height)
+    # Check URL Patterns
+    if any(x in url_lower for x in ['/product', '/cart', '/checkout', '/services']): score_comm += 3
+    if any(x in url_lower for x in ['/blog', '/article', '/news', '/wiki', '/guide']): score_info += 3
     
-    def clean_text(text):
-        return str(text).encode('latin-1', 'ignore').decode('latin-1')
+    if score_comm > score_info: return "Commercial"
+    if score_info > score_comm: return "Informational"
+    return "Ambiguous"
 
-    for _, row in critical.head(20).iterrows(): 
-        pdf.cell(col_width, row_height, clean_text(row['Query'])[:25], border=1)
-        pdf.cell(col_width, row_height, clean_text(row['Market']), border=1)
-        pdf.cell(col_width, row_height, clean_text(row['Winner'])[-20:], border=1)
-        pdf.cell(col_width, row_height, clean_text(row['Loser'])[-20:], border=1)
-        pdf.ln(row_height)
+def classify_cannibalization(row, brands):
+    """
+    The Senior SEO Logic:
+    Distinguishes between 'Bad Cannibalization' and 'Good Dominance'.
+    """
+    winner_pos = row['Winner_Pos']
+    loser_pos = row['Loser_Pos']
+    winner_intent = row['Winner_Intent']
+    loser_intent = row['Loser_Intent']
+    query = row['Query']
+    
+    # 1. Brand Check
+    is_brand = any(b.lower() in query.lower() for b in brands)
+    if is_brand:
+        return "Brand Dominance (Safe)", "🟢", "Monitor"
+
+    # 2. Dominance Check (e.g. Ranking #1 and #2)
+    if winner_pos <= Config.DOMINANCE_TOP_POS and loser_pos <= Config.DOMINANCE_SECOND_POS:
+        return "SERP Dominance (Good)", "🟢", "Monitor - Do Not Touch"
+
+    # 3. Intent Mismatch Check
+    if winner_intent != "Ambiguous" and loser_intent != "Ambiguous" and winner_intent != loser_intent:
+        return "Intent Conflict", "🟠", "Content Split / De-optimize Loser"
+
+    # 4. True Cannibalization (The bad stuff)
+    # High Severity: Loser is stealing significant traffic or dragging winner down
+    if row['Overlap_Score'] > 0.6: 
+        return "Critical Cannibalization", "🔴", "Merge / 301 Redirect"
+    
+    return "Moderate Cannibalization", "🟡", "Review Content Diff"
+
+def analyze_gsc_data(df_raw, brands):
+    # 1. Cleaning
+    df = df_raw.copy()
+    df['page_clean'] = df['page'].apply(lambda x: str(x).split('?')[0].split('#')[0].rstrip('/'))
+    
+    # 2. Aggregation (Merge split URLs)
+    df_agg = df.groupby(['query', 'page_clean']).agg({
+        'clicks': 'sum',
+        'impressions': 'sum',
+        'ctr': 'mean',
+        'position': 'mean'
+    }).reset_index()
+    
+    # 3. Filter Noise
+    df_agg = df_agg[df_agg['impressions'] >= Config.MIN_IMPRESSIONS]
+    
+    # 4. Identify Queries with Multiple Pages
+    query_counts = df_agg['query'].value_counts()
+    cannibal_queries = query_counts[query_counts > 1].index.tolist()
+    
+    if not cannibal_queries:
+        return pd.DataFrame()
+    
+    df_cannibal = df_agg[df_agg['query'].isin(cannibal_queries)]
+    
+    results = []
+    
+    for query, group in df_cannibal.groupby('query'):
+        # Sort by Clicks (primary) then Impressions
+        group = group.sort_values(['clicks', 'impressions'], ascending=[False, False])
         
-    return pdf.output(dest='S').encode('latin-1', 'ignore')
+        winner = group.iloc[0]
+        losers = group.iloc[1:]
+        
+        # Calculate Winner Intent
+        w_intent = get_page_intent(winner['page_clean'], query)
+        
+        for _, loser in losers.iterrows():
+            l_intent = get_page_intent(loser['page_clean'], query)
+            
+            # Overlap Score (How much is the loser eating?)
+            overlap = (loser['impressions'] / winner['impressions']) if winner['impressions'] > 0 else 0
+            
+            # Traffic Loss Estimation (Simplified CTR Curve model)
+            # Assuming if Loser didn't exist, Winner would get 80% of Loser's Impressions converted at Winner's CTR
+            traffic_loss = int(loser['impressions'] * winner['ctr'])
+            
+            row_data = {
+                'Query': query,
+                'Winner_Page': winner['page_clean'],
+                'Winner_Pos': round(winner['position'], 1),
+                'Winner_Intent': w_intent,
+                'Loser_Page': loser['page_clean'],
+                'Loser_Pos': round(loser['position'], 1),
+                'Loser_Intent': l_intent,
+                'Loser_Imps': loser['impressions'],
+                'Overlap_Score': overlap,
+                'Traffic_Loss': traffic_loss
+            }
+            
+            # Apply Logic
+            status, icon, action = classify_cannibalization(row_data, brands)
+            
+            row_data.update({
+                'Status': status,
+                'Icon': icon,
+                'Action': action,
+                'Priority': traffic_loss  # Sort key
+            })
+            
+            results.append(row_data)
+            
+    return pd.DataFrame(results).sort_values('Priority', ascending=False)
 
 # ==========================================
-# 🧠 3. CORE LOGIC
-# ==========================================
-def identify_market_segment(url, default_lang="EN"):
-    try:
-        decoded = urllib.parse.unquote(str(url))
-        path = urlparse(decoded).path.strip('/').split('/')
-        first = path[0].lower() if path else ""
-        if re.match(r'^[a-z]{2}-[a-z]{2}$', first): return first.upper()
-        if re.match(r'^[a-z]{2}$', first): return f"Global-{first.upper()}"
-        if re.search(r'[\u0600-\u06FF]', decoded): return "Global-AR"
-        return f"Global-{default_lang}"
-    except: return "Unknown"
-
-def detect_intents(df):
-    q_lower = df['query'].str.lower()
-    url_decoded = df['page_clean'].apply(lambda x: urllib.parse.unquote(str(x)).lower())
-
-    c_mask = q_lower.apply(lambda x: any(t in x for t in Config.COMM_TERMS))
-    i_mask = q_lower.apply(lambda x: any(t in x for t in Config.INFO_TERMS))
-    
-    df['q_intent'] = np.select([c_mask & ~i_mask, i_mask & ~c_mask], ['Commercial', 'Informational'], default='General')
-    
-    p_intent = pd.Series('General', index=df.index)
-    for term in Config.URL_PATTERNS['Informational']['terms']:
-        p_intent[url_decoded.str.contains(term, regex=False)] = 'Informational'
-    for term in Config.URL_PATTERNS['Commercial']['terms']:
-        p_intent[url_decoded.str.contains(term, regex=False)] = 'Commercial'
-    
-    df['p_intent'] = p_intent
-    return df
-
-def calculate_score(df):
-    max_imp = df.groupby('query_market')['impressions'].transform('max').replace(0, 1)
-    max_click = df.groupby('query_market')['clicks'].transform('max').replace(0, 1)
-    
-    score = (df['clicks']/max_click * Config.WEIGHTS['clicks']) + \
-            ((10 / (np.log(df['position'] + 1) + 1)) * Config.WEIGHTS['pos']) + \
-            (df['impressions']/max_imp * Config.WEIGHTS['imps']) + \
-            ((1 / (df['page_clean'].str.count('/').clip(upper=6) + 1)) * Config.WEIGHTS['depth'])
-    return score
-
-# ==========================================
-# 🔌 4. DATA & API
+# 🔌 4. GSC CONNECTIVITY
 # ==========================================
 @st.cache_resource
 def authenticate_gsc(auth_code):
     try:
-        flow = InstalledAppFlow.from_client_secrets_file("client_secret.json", ['https://www.googleapis.com/auth/webmasters.readonly'])
+        flow = InstalledAppFlow.from_client_secrets_file(
+            "client_secret.json", 
+            ['https://www.googleapis.com/auth/webmasters.readonly']
+        )
         flow.redirect_uri = "urn:ietf:wg:oauth:2.0:oob"
         flow.fetch_token(code=auth_code)
         return build('searchconsole', 'v1', credentials=flow.credentials)
     except Exception as e:
         return None
 
-def get_site_list(service):
-    try:
-        site_list = service.sites().list().execute()
-        return [s['siteUrl'] for s in site_list.get('siteEntry', [])]
-    except Exception as e:
-        st.error(f"Error fetching sites: {e}")
-        return []
-
-def fetch_gsc_data(service, site_url, days):
-    end = datetime.date.today()
-    start = end - datetime.timedelta(days=days)
-    all_rows = []
-    start_row = 0
-    batch = 25000
+def fetch_data(service, site_url, days):
+    end_date = datetime.date.today()
+    start_date = end_date - datetime.timedelta(days=days)
     
-    bar = st.progress(0)
-    status = st.empty()
+    request = {
+        'startDate': start_date.isoformat(),
+        'endDate': end_date.isoformat(),
+        'dimensions': ['query', 'page'],
+        'rowLimit': 25000 
+    }
     
-    while True:
-        status.text(f"📡 جاري سحب البيانات... ({len(all_rows)} صف)")
-        try:
-            req = {'startDate': start.isoformat(), 'endDate': end.isoformat(), 'dimensions': ['query', 'page'], 'rowLimit': batch, 'startRow': start_row}
-            resp = service.searchanalytics().query(siteUrl=site_url, body=req).execute()
-            rows = resp.get('rows', [])
-            if not rows: break
-            all_rows.extend(rows)
-            start_row += len(rows)
-            bar.progress(min(start_row / 100000, 0.95))
-            if len(rows) < batch: break
-        except Exception as e:
-            st.error(f"API Error: {e}")
-            break
-            
-    bar.empty()
-    status.empty()
-    return all_rows
+    response = service.searchanalytics().query(siteUrl=site_url, body=request).execute()
+    rows = response.get('rows', [])
+    
+    if not rows: return pd.DataFrame()
+    
+    data = []
+    for row in rows:
+        data.append({
+            'query': row['keys'][0],
+            'page': row['keys'][1],
+            'clicks': row['clicks'],
+            'impressions': row['impressions'],
+            'ctr': row['ctr'],
+            'position': row['position']
+        })
+    return pd.DataFrame(data)
 
 # ==========================================
-# 📊 5. MULTI-PAGE ANALYSIS ENGINE
-# ==========================================
-@st.cache_data(show_spinner=False)
-def run_analysis(df_raw, brands, default_lang):
-    df = df_raw.copy()
-    df.columns = [c.lower() for c in df.columns]
-    
-    # 1. Clean URL
-    df['page_clean'] = df['page'].astype(str).str.split('?').str[0].str.split('#').str[0].str.rstrip('/')
-    
-    # --- FIX: AGGREGATE DUPLICATES (Merge same query+page rows) ---
-    # This prevents the issue where same page appears multiple times for same query due to device/date diffs
-    df = df.groupby(['query', 'page_clean'], as_index=False).agg({
-        'clicks': 'sum',
-        'impressions': 'sum',
-        'ctr': 'mean',
-        'position': 'mean'
-    })
-    
-    # 2. Identify Markets
-    df['market'] = df['page_clean'].apply(lambda x: identify_market_segment(x, default_lang))
-    
-    # 3. Detect Intents
-    df = detect_intents(df)
-    
-    # 4. Score
-    df['query_market'] = df['query'] + "_" + df['market']
-    df['score'] = calculate_score(df)
-    
-    report = []
-    groups = df.groupby('query_market')
-    
-    for qm, group in groups:
-        if len(group) < 2: continue
-        
-        group = group.sort_values('score', ascending=False)
-        winner = group.iloc[0]
-        losers = group.iloc[1:]
-        
-        min_imp_check = max(group['impressions'].max() * 0.05, 5)
-        significant_losers = losers[losers['impressions'] >= min_imp_check]
-        
-        if significant_losers.empty: continue
-        
-        for _, loser in significant_losers.iterrows():
-            overlap = loser['score'] / winner['score']
-            is_brand = any(b in winner['query'] for b in brands)
-            severity_score = overlap * (1.2 if is_brand else 1.0)
-            
-            severity = "Low"
-            if severity_score > Config.SEVERITY_CRITICAL: severity = "Critical"
-            elif severity_score > Config.SEVERITY_HIGH: severity = "High"
-            elif severity_score > Config.SEVERITY_MEDIUM: severity = "Medium"
-            
-            reason = "Duplicate Content" if winner['p_intent'] == loser['p_intent'] else "Intent Mismatch"
-            if is_brand: reason = "Brand Conflict"
-            
-            action = "Merge / 301" if severity == "Critical" and reason != "Intent Mismatch" else "Split Intent"
-            if severity == "Low": action = "Monitor"
-            
-            traffic_loss = int(loser['impressions'] * winner['ctr']) 
-            
-            sev_pts = {"Critical": 40, "High": 25, "Medium": 10}.get(severity, 5)
-            tf_pts = min(math.log(traffic_loss+1)*10, 50)
-            priority = int(min(tf_pts + sev_pts + (10 if is_brand else 0), 100))
-            
-            report.append({
-                'Market': winner['market'],
-                'Query': winner['query'],
-                'Severity': severity,
-                'Priority': priority,
-                'Reason': reason,
-                'Action': action,
-                'Traffic_Loss': traffic_loss,
-                'Winner': winner['page_clean'],
-                'Loser': loser['page_clean'],
-                'Overlap': round(overlap * 100, 1),
-                'Winner_Intent': winner['p_intent'],
-                'Loser_Intent': loser['p_intent']
-            })
-            
-    return pd.DataFrame(report)
-
-# ==========================================
-# 🖥️ 6. MAIN APP
+# 🖥️ 5. MAIN DASHBOARD
 # ==========================================
 with st.sidebar:
-    st.header("⚙️ مركز التحكم")
-    uploaded_file = st.file_uploader("ملف المصادقة (JSON)", type="json")
+    st.header("⚙️ الإعدادات")
     
-    st.markdown("---")
+    # Auth
+    uploaded_file = st.file_uploader("ملف JSON (client_secret)", type="json")
     
     if 'creds' in st.session_state:
-        st.success("✅ متصل بـ GSC")
+        st.success("✅ متصل بنجاح")
+        sites = st.session_state.get('sites', [])
+        if not sites:
+            try:
+                site_list = st.session_state.creds.sites().list().execute()
+                sites = [s['siteUrl'] for s in site_list.get('siteEntry', [])]
+                st.session_state.sites = sites
+            except: pass
         
-        if 'sites' not in st.session_state:
-            with st.spinner("جلب قائمة المواقع..."):
-                st.session_state.sites = get_site_list(st.session_state.creds)
-        
-        if st.session_state.sites:
-            selected_site = st.selectbox("🌐 اختر الموقع (Property)", st.session_state.sites)
-        else:
-            selected_site = st.text_input("أو اكتب الرابط يدوياً", "sc-domain:example.com")
-            
+        selected_site = st.selectbox("اختر الموقع", sites)
     else:
-        st.warning("يرجى المصادقة أولاً")
-        selected_site = None
+        selected_site = st.text_input("رابط الموقع (يدوي)", "https://example.com")
 
-    days = st.slider("فترة التحليل", 7, 90, 30)
-    default_lang = st.radio("اللغة الاحتياطية (للحالات الغامضة)", ["AR", "EN"])
+    days = st.slider("فترة التحليل (أيام)", 7, 90, 28)
     
-    with st.expander("🔔 إعدادات التنبيهات (Slack)"):
-        slack_webhook = st.text_input("Slack Webhook URL", placeholder="https://hooks.slack.com/...")
-        
-    with st.expander("🛡️ إعدادات البراند"):
-        brands_str = st.text_area("كلمات البراند", "almaster, المستر, ماستر")
-        brands = [x.strip() for x in brands_str.split(',')]
+    st.markdown("---")
+    st.subheader("🛡️ إعدادات البراند")
+    brands_input = st.text_area("كلمات البراند (افصل بفاصلة)", "almaster, المستر, ماستر")
+    brands = [b.strip() for b in brands_input.split(',')]
 
-# Auth Logic
+# Login Flow
 if uploaded_file and 'creds' not in st.session_state:
-    with open("client_secret.json", "wb") as f:
-        f.write(uploaded_file.getbuffer())
-    
+    with open("client_secret.json", "wb") as f: f.write(uploaded_file.getbuffer())
     flow = InstalledAppFlow.from_client_secrets_file("client_secret.json", ['https://www.googleapis.com/auth/webmasters.readonly'])
     flow.redirect_uri = "urn:ietf:wg:oauth:2.0:oob"
     auth_url, _ = flow.authorization_url()
-    
-    st.info("👋 تسجيل الدخول مطلوب")
-    st.markdown(f"[👉 **اضغط هنا للمصادقة**]({auth_url})")
-    code = st.text_input("الصق الكود هنا:")
+    st.markdown(f"[🔗 اضغط هنا للحصول على الكود]({auth_url})")
+    code = st.text_input("أدخل كود المصادقة:")
     if code:
         srv = authenticate_gsc(code)
         if srv:
             st.session_state.creds = srv
             st.rerun()
-        else:
-            st.error("كود خاطئ")
 
-# Main Execution
-if 'creds' in st.session_state and selected_site:
-    if st.button("🚀 تشغيل الفحص الشامل"):
-        with st.spinner(f"جاري تحليل {selected_site}..."):
-            raw = fetch_gsc_data(st.session_state.creds, selected_site, days)
-            if raw:
-                df_raw = pd.DataFrame([{
-                    'query': r['keys'][0], 
-                    'page': r['keys'][1],
-                    'clicks': r['clicks'], 
-                    'impressions': r['impressions'],
-                    'ctr': r['ctr'],
-                    'position': r['position']
-                } for r in raw])
-                
-                with st.spinner("🤖 تحليل وتنظيف البيانات..."):
-                    report = run_analysis(df_raw, brands, default_lang)
-                    
-                    # --- FIX: Drop duplicates in report ---
-                    report = report.drop_duplicates(subset=['Market', 'Query', 'Winner', 'Loser'])
-                    
-                    st.session_state.report = report
-                    
-                    critical_count = len(report[report['Severity']=='Critical'])
-                    if critical_count > 0 and slack_webhook:
-                        send_slack_alert(slack_webhook, critical_count, selected_site)
+# Analysis Trigger
+if st.button("🚀 تشغيل التحليل (Deep Scan)", type="primary"):
+    if 'creds' in st.session_state:
+        with st.spinner("جاري سحب البيانات وتحليل الـ SERP Logic..."):
+            raw_df = fetch_data(st.session_state.creds, selected_site, days)
+            if not raw_df.empty:
+                report_df = analyze_gsc_data(raw_df, brands)
+                st.session_state.report = report_df
             else:
-                st.warning("لا توجد بيانات")
+                st.error("لا توجد بيانات كافية للفترة المحددة.")
+    else:
+        st.warning("يرجى تسجيل الدخول أولاً.")
 
-# Results Dashboard
-if 'report' in st.session_state:
+# Reporting View
+if 'report' in st.session_state and not st.session_state.report.empty:
     df = st.session_state.report
     
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("🔴 تضارب حرج", len(df[df['Severity']=='Critical']))
-    c2.metric("⚠️ تضارب عالى", len(df[df['Severity']=='High']))
-    c3.metric("📉 زيارات مهددة", f"{df['Traffic_Loss'].sum():,}")
-    c4.metric("📄 صفحات متأثرة", df['Loser'].nunique())
+    # Metrics
+    col1, col2, col3, col4 = st.columns(4)
+    critical = df[df['Status'].str.contains('Critical')]
+    dominance = df[df['Status'].str.contains('Dominance')]
+    
+    col1.metric("🔴 تضارب حرج (يجب الإصلاح)", len(critical))
+    col2.metric("🟢 هيمنة (ممتاز)", len(dominance))
+    col3.metric("🟠 تضارب نوايا", len(df[df['Status'].str.contains('Intent')]))
+    col4.metric("📉 زيارات محتملة ضائعة", f"{critical['Traffic_Loss'].sum():,}")
     
     st.markdown("---")
-    col1, col2 = st.columns(2)
-    with col1:
-        sev_fil = st.multiselect("تصفية الخطورة", df['Severity'].unique(), default=['Critical'])
-    with col2:
-        mkt_fil = st.multiselect("تصفية السوق", df['Market'].unique())
+    
+    # Tabs
+    tab1, tab2 = st.tabs(["📋 تقرير العمليات (Actionable)", "📊 البيانات الكاملة"])
+    
+    with tab1:
+        st.subheader("أولويات الإصلاح")
+        st.info("💡 هذا الجدول يظهر فقط المشاكل التي تتطلب تدخلاً (تم استبعاد الهيمنة الإيجابية).")
         
-    filtered_df = df.copy()
-    if sev_fil: filtered_df = filtered_df[filtered_df['Severity'].isin(sev_fil)]
-    if mkt_fil: filtered_df = filtered_df[filtered_df['Market'].isin(mkt_fil)]
-    
-    st.dataframe(
-        filtered_df.style.apply(lambda x: ['background-color: rgba(255,0,0,0.1)' if v == 'Critical' else '' for v in x], axis=1),
-        use_container_width=True,
-        height=500
-    )
-    
-    col_dl1, col_dl2 = st.columns(2)
-    
+        action_df = df[~df['Status'].str.contains('Dominance')].copy()
+        
+        st.dataframe(
+            action_df[['Icon', 'Query', 'Status', 'Action', 'Winner_Page', 'Loser_Page', 'Traffic_Loss']],
+            column_config={
+                "Winner_Page": st.column_config.LinkColumn("الصفحة الفائزة"),
+                "Loser_Page": st.column_config.LinkColumn("الصفحة الخاسرة"),
+                "Traffic_Loss": st.column_config.ProgressColumn("حجم الخسارة", format="%d", min_value=0, max_value=int(action_df['Traffic_Loss'].max()))
+            },
+            use_container_width=True,
+            height=500
+        )
+        
+    with tab2:
+        st.dataframe(df, use_container_width=True)
+
+    # Excel Export (The Professional Way)
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        filtered_df.to_excel(writer, index=False)
-    col_dl1.download_button("📥 Excel Report", output.getvalue(), "seo_audit.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        df.to_excel(writer, sheet_name='Full Report', index=False)
+        critical.to_excel(writer, sheet_name='CRITICAL ACTIONS', index=False)
+        dominance.to_excel(writer, sheet_name='Dominance Wins', index=False)
     
-    try:
-        pdf_bytes = create_pdf_report(filtered_df, selected_site)
-        col_dl2.download_button("📄 PDF Summary", pdf_bytes, "seo_summary.pdf", "application/pdf")
-    except Exception as e:
-        col_dl2.warning("PDF غير متاح حالياً")
+    st.download_button(
+        label="📥 تحميل تقرير Excel احترافي",
+        data=output.getvalue(),
+        file_name=f"Almaster_SEO_Audit_{datetime.date.today()}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
 
-else:
-    if 'creds' in st.session_state:
-        st.info("👈 اختر الموقع واضغط زر التشغيل")
+elif 'report' in st.session_state:
+    st.success("🎉 نظيف تماماً! لا يوجد أي تضارب (Cannibalization) في موقعك.")
