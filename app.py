@@ -66,7 +66,7 @@ st.markdown("""
 st.markdown("""
 <div style="text-align: center; margin-bottom: 30px; background: rgba(0,0,0,0.3); padding: 20px; border-radius: 15px;">
     <h1 style="color:white; margin:0;">ALMASTER <span style="color:#38bdf8;">TECH</span></h1>
-    <p style="color:#94a3b8; font-size:16px;">SEO Command Center v16.0 (Stable)</p>
+    <p style="color:#94a3b8; font-size:16px;">SEO Command Center v17.0 (Clean Data)</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -76,7 +76,7 @@ st.markdown("""
 class Config:
     SEVERITY_CRITICAL = 0.8
     SEVERITY_HIGH = 0.5
-    SEVERITY_MEDIUM = 0.3 # Added missing constant
+    SEVERITY_MEDIUM = 0.3
     
     MIN_IMP_QUANTILE = 0.2
     MIN_IMP_ABSOLUTE = 10
@@ -123,7 +123,6 @@ def create_pdf_report(df, site_url):
         pdf.cell(col_width, row_height, h, border=1)
     pdf.ln(row_height)
     
-    # Ensure strings are latin-1 compatible for FPDF or strip characters
     def clean_text(text):
         return str(text).encode('latin-1', 'ignore').decode('latin-1')
 
@@ -236,15 +235,29 @@ def run_analysis(df_raw, brands, default_lang):
     df = df_raw.copy()
     df.columns = [c.lower() for c in df.columns]
     
+    # 1. Clean URL
     df['page_clean'] = df['page'].astype(str).str.split('?').str[0].str.split('#').str[0].str.rstrip('/')
+    
+    # --- FIX: AGGREGATE DUPLICATES (Merge same query+page rows) ---
+    # This prevents the issue where same page appears multiple times for same query due to device/date diffs
+    df = df.groupby(['query', 'page_clean'], as_index=False).agg({
+        'clicks': 'sum',
+        'impressions': 'sum',
+        'ctr': 'mean',
+        'position': 'mean'
+    })
+    
+    # 2. Identify Markets
     df['market'] = df['page_clean'].apply(lambda x: identify_market_segment(x, default_lang))
+    
+    # 3. Detect Intents
     df = detect_intents(df)
     
+    # 4. Score
     df['query_market'] = df['query'] + "_" + df['market']
     df['score'] = calculate_score(df)
     
     report = []
-    
     groups = df.groupby('query_market')
     
     for qm, group in groups:
@@ -254,7 +267,6 @@ def run_analysis(df_raw, brands, default_lang):
         winner = group.iloc[0]
         losers = group.iloc[1:]
         
-        # Filter insignificant losers
         min_imp_check = max(group['impressions'].max() * 0.05, 5)
         significant_losers = losers[losers['impressions'] >= min_imp_check]
         
@@ -276,11 +288,7 @@ def run_analysis(df_raw, brands, default_lang):
             action = "Merge / 301" if severity == "Critical" and reason != "Intent Mismatch" else "Split Intent"
             if severity == "Low": action = "Monitor"
             
-            # --- FIX: Ensure winner['ctr'] exists ---
-            # Dataframes from GSC API have 'ctr' (ratio 0-1) or percentage.
-            # Usually 'ctr' in raw GSC data is float (e.g. 0.05 for 5%).
-            # We multiply by 100 for display, but here we use it for calc.
-            traffic_loss = int(loser['impressions'] * winner['ctr']) # Potential loss
+            traffic_loss = int(loser['impressions'] * winner['ctr']) 
             
             sev_pts = {"Critical": 40, "High": 25, "Medium": 10}.get(severity, 5)
             tf_pts = min(math.log(traffic_loss+1)*10, 50)
@@ -329,7 +337,6 @@ with st.sidebar:
         selected_site = None
 
     days = st.slider("فترة التحليل", 7, 90, 30)
-    # Updated Label
     default_lang = st.radio("اللغة الاحتياطية (للحالات الغامضة)", ["AR", "EN"])
     
     with st.expander("🔔 إعدادات التنبيهات (Slack)"):
@@ -365,18 +372,21 @@ if 'creds' in st.session_state and selected_site:
         with st.spinner(f"جاري تحليل {selected_site}..."):
             raw = fetch_gsc_data(st.session_state.creds, selected_site, days)
             if raw:
-                # --- BUG FIX: Added 'ctr' here ---
                 df_raw = pd.DataFrame([{
                     'query': r['keys'][0], 
                     'page': r['keys'][1],
                     'clicks': r['clicks'], 
                     'impressions': r['impressions'],
-                    'ctr': r['ctr'], # Fixed missing column
+                    'ctr': r['ctr'],
                     'position': r['position']
                 } for r in raw])
                 
-                with st.spinner("🤖 تحليل التضارب العميق (Multi-Page)..."):
+                with st.spinner("🤖 تحليل وتنظيف البيانات..."):
                     report = run_analysis(df_raw, brands, default_lang)
+                    
+                    # --- FIX: Drop duplicates in report ---
+                    report = report.drop_duplicates(subset=['Market', 'Query', 'Winner', 'Loser'])
+                    
                     st.session_state.report = report
                     
                     critical_count = len(report[report['Severity']=='Critical'])
@@ -423,7 +433,7 @@ if 'report' in st.session_state:
         pdf_bytes = create_pdf_report(filtered_df, selected_site)
         col_dl2.download_button("📄 PDF Summary", pdf_bytes, "seo_summary.pdf", "application/pdf")
     except Exception as e:
-        col_dl2.warning("PDF غير متاح حالياً (Font Issue)")
+        col_dl2.warning("PDF غير متاح حالياً")
 
 else:
     if 'creds' in st.session_state:
