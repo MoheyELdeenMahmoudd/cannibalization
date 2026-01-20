@@ -6,12 +6,13 @@ import datetime
 import re
 import requests
 import urllib.parse
+from urllib.parse import urlparse
 from concurrent.futures import ThreadPoolExecutor
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
 # ==========================================
-# 🎨 1. UI CONFIGURATION & STYLING
+# 🎨 1. UI CONFIGURATION
 # ==========================================
 st.set_page_config(page_title="Almaster Tech | SEO Command Center", page_icon="🦁", layout="wide")
 
@@ -19,83 +20,75 @@ st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap');
     html, body, [class*="css"] { font-family: 'Cairo', sans-serif !important; }
-    
     .stApp { background-color: #0e1117; color: #ffffff; }
-    
     .header-box {
         background: linear-gradient(90deg, #1e293b, #0f172a);
         padding: 20px; border-radius: 12px; border-left: 5px solid #38bdf8;
         margin-bottom: 25px; text-align: center;
     }
-    
     div[data-testid="stMetric"] {
         background-color: #1f2937; border: 1px solid #374151;
         border-radius: 10px; padding: 15px; direction: rtl;
     }
-    
     .rtl { direction: rtl; text-align: right; }
     .stSelectbox, .stTextInput, .stSlider { direction: rtl; }
 </style>
 """, unsafe_allow_html=True)
 
-# Header
 st.markdown("""
 <div class="header-box">
     <h1 style="color:white; margin:0;">ALMASTER <span style="color:#38bdf8;">TECH</span></h1>
-    <p style="color:#94a3b8; font-size:16px;">SEO Command Center v4.0 (90-Day Deep Scan)</p>
+    <p style="color:#94a3b8; font-size:16px;">SEO Command Center v5.0 (Geo-Targeting & Live Logic)</p>
 </div>
 """, unsafe_allow_html=True)
 
 # ==========================================
-# ⚙️ 2. ADVANCED CONFIGURATION
+# ⚙️ 2. CONFIG & LOGIC DEFINITIONS
 # ==========================================
 class Config:
-    # Logic Thresholds
-    DOMINANCE_TOP_POS = 3.5  
-    DOMINANCE_SECOND_POS = 6.0 
+    DOMINANCE_TOP = 3.5  
+    DOMINANCE_SEC = 6.0 
+    MIN_IMPS = 10     
     
-    MIN_IMPRESSIONS = 10     # Lowered for 90-day aggregation
-    
-    # Intent Dictionaries
-    COMM_TERMS = ['buy', 'price', 'cost', 'service', 'hire', 'agency', 'shop', 'store', 'book',
-                  'شراء', 'سعر', 'اسعار', 'تكلفة', 'خدمة', 'شركة', 'وكالة', 'متجر', 'طلب', 'حجز', 'عيادة', 'دكتور']
-    
-    INFO_TERMS = ['how', 'what', 'guide', 'tips', 'best', 'review', 'vs', 'signs', 'symptoms', 'causes',
-                  'كيف', 'ما هو', 'دليل', 'شرح', 'نصائح', 'افضل', 'مقارنة', 'الفرق', 'اعراض', 'علاج', 'اسباب', 'طريقة']
+    # Intent Terms
+    COMM_TERMS = ['buy', 'price', 'service', 'agency', 'shop', 'store', 'book', 'شراء', 'سعر', 'اسعار', 'خدمة', 'شركة', 'وكالة', 'متجر', 'حجز', 'عيادة', 'دكتور']
+    INFO_TERMS = ['how', 'what', 'guide', 'tips', 'best', 'review', 'vs', 'signs', 'causes', 'كيف', 'ما هو', 'دليل', 'شرح', 'نصائح', 'افضل', 'مقارنة', 'اعراض', 'علاج', 'اسباب']
 
 # ==========================================
-# 🕵️ 3. LIVE VALIDATOR ENGINE
+# 🌍 3. GEO & MARKET LOGIC (THE FIX)
 # ==========================================
-def get_live_status(url):
+def detect_market(url, query):
     """
-    Checks if page is live, redirected (301), or gone (404).
+    Detects if the page is targeting Saudi, Egypt, Global, or General Arabic.
     """
-    try:
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AlmasterTechBot/1.0'}
-        response = requests.head(url, allow_redirects=True, timeout=3, headers=headers)
-        
-        was_redirected = False
-        if response.history:
-            was_redirected = True
-            
-        return response.status_code, was_redirected, response.url
-    except:
-        return 0, False, url
-
-# ==========================================
-# 🧠 4. CORE LOGIC ENGINE
-# ==========================================
+    url_str = str(url).lower()
+    path = urlparse(url_str).path
+    query_str = str(query)
+    
+    # 1. Explicit Geo-Patterns in URL
+    if '/sa/' in path or '.sa' in url_str or '-sa' in path:
+        return "Saudi (KSA)"
+    if '/eg/' in path or '.eg' in url_str or '-eg' in path:
+        return "Egypt (EG)"
+    if '/ae/' in path or '.ae' in url_str:
+        return "UAE"
+    
+    # 2. Language Detection (Ar vs En)
+    is_arabic_query = bool(re.search(r'[\u0600-\u06FF]', query_str))
+    is_arabic_url = bool(re.search(r'[\u0600-\u06FF]', url_str)) or '/ar/' in path
+    
+    if is_arabic_query or is_arabic_url:
+        return "Arabic (General)"
+    
+    return "Global (English)"
 
 def get_page_intent(url, query):
     url_lower = str(url).lower()
     query_lower = str(query).lower()
-    
-    score_comm = 0
-    score_info = 0
+    score_comm, score_info = 0, 0
     
     if any(t in query_lower for t in Config.COMM_TERMS): score_comm += 2
     if any(t in query_lower for t in Config.INFO_TERMS): score_info += 2
-    
     if any(x in url_lower for x in ['/product', '/cart', '/checkout', '/services']): score_comm += 3
     if any(x in url_lower for x in ['/blog', '/article', '/news', '/wiki', '/guide']): score_info += 3
     
@@ -103,278 +96,261 @@ def get_page_intent(url, query):
     if score_info > score_comm: return "Informational"
     return "Ambiguous"
 
-def classify_cannibalization(row, brands):
-    winner_pos = row['Winner_Pos']
-    loser_pos = row['Loser_Pos']
-    winner_intent = row['Winner_Intent']
-    loser_intent = row['Loser_Intent']
+# ==========================================
+# 🕵️ 4. LIVE VALIDATOR (REDIRECTION CHECK)
+# ==========================================
+def get_live_status(url):
+    try:
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AlmasterTechBot/1.0'}
+        # allow_redirects=True follows the chain. history checks if it happened.
+        response = requests.head(url, allow_redirects=True, timeout=5, headers=headers)
+        was_redirected = bool(response.history) or response.status_code in [301, 302, 307, 308]
+        return response.status_code, was_redirected, response.url
+    except:
+        return 0, False, url
+
+# ==========================================
+# 🧠 5. ANALYSIS ENGINE
+# ==========================================
+def classify_issue(row, brands):
+    w_pos = row['Winner_Pos']
+    l_pos = row['Loser_Pos']
+    w_mkt = row['Winner_Market']
+    l_mkt = row['Loser_Market']
     query = row['Query']
     
-    # 1. Brand Check
-    is_brand = any(b.lower() in query.lower() for b in brands)
-    if is_brand:
-        return "Brand Dominance (Safe)", "🟢", "Monitor"
+    # 1. Geo/Market Conflict (New Logic)
+    # If markets are different (e.g., Saudi vs Global) and neither is "General Arabic" acting as fallback
+    if w_mkt != l_mkt and "General" not in w_mkt and "General" not in l_mkt:
+         return "Wrong Market Target", "🌍", "Hreflang / Geo-Targeting Fix"
 
-    # 2. Dominance Check
-    if winner_pos <= Config.DOMINANCE_TOP_POS and loser_pos <= Config.DOMINANCE_SECOND_POS:
-        return "SERP Dominance (Good)", "🟢", "Monitor - Do Not Touch"
+    # 2. Brand Dominance
+    if any(b.lower() in query.lower() for b in brands):
+        return "Brand Dominance", "🟢", "Monitor"
 
-    # 3. Intent Mismatch
-    if winner_intent != "Ambiguous" and loser_intent != "Ambiguous" and winner_intent != loser_intent:
+    # 3. SERP Dominance
+    if w_pos <= Config.DOMINANCE_TOP and l_pos <= Config.DOMINANCE_SEC:
+        return "SERP Dominance", "🟢", "Monitor"
+
+    # 4. Intent Conflict
+    w_int = row['Winner_Intent']
+    l_int = row['Loser_Intent']
+    if w_int != "Ambiguous" and l_int != "Ambiguous" and w_int != l_int:
         return "Intent Conflict", "🟠", "Content Split"
 
-    # 4. True Cannibalization
+    # 5. Cannibalization
     if row['Overlap_Score'] > 0.6: 
-        return "Critical Cannibalization", "🔴", "Merge / 301 Redirect"
+        return "Critical Cannibalization", "🔴", "Merge / 301"
     
-    return "Moderate Cannibalization", "🟡", "Review Content Diff"
+    return "Moderate Cannibalization", "🟡", "Review"
 
-def analyze_gsc_data(df_raw, brands):
-    # 1. Clean & Aggregate
+def analyze_data(df_raw, brands):
     df = df_raw.copy()
+    # Clean URLs
     df['page_clean'] = df['page'].apply(lambda x: str(x).split('?')[0].split('#')[0].rstrip('/'))
     
+    # Aggregate
     df_agg = df.groupby(['query', 'page_clean']).agg({
-        'clicks': 'sum',
-        'impressions': 'sum',
-        'ctr': 'mean',
-        'position': 'mean'
+        'clicks': 'sum', 'impressions': 'sum', 'ctr': 'mean', 'position': 'mean'
     }).reset_index()
     
-    df_agg = df_agg[df_agg['impressions'] >= Config.MIN_IMPRESSIONS]
+    df_agg = df_agg[df_agg['impressions'] >= Config.MIN_IMPS]
     
-    query_counts = df_agg['query'].value_counts()
-    cannibal_queries = query_counts[query_counts > 1].index.tolist()
+    # Find Duplicates
+    q_counts = df_agg['query'].value_counts()
+    cannibal_qs = q_counts[q_counts > 1].index.tolist()
     
-    if not cannibal_queries:
-        return pd.DataFrame()
+    if not cannibal_qs: return pd.DataFrame()
     
-    df_cannibal = df_agg[df_agg['query'].isin(cannibal_queries)]
+    df_c = df_agg[df_agg['query'].isin(cannibal_qs)]
     results = []
-    pages_to_check = []
+    check_queue = []
     
-    # 2. Logic Pass
-    for query, group in df_cannibal.groupby('query'):
+    for query, group in df_c.groupby('query'):
         group = group.sort_values(['clicks', 'impressions'], ascending=[False, False])
         winner = group.iloc[0]
         losers = group.iloc[1:]
         
-        w_intent = get_page_intent(winner['page_clean'], query)
+        w_mkt = detect_market(winner['page_clean'], query)
+        w_int = get_page_intent(winner['page_clean'], query)
         
         for _, loser in losers.iterrows():
-            l_intent = get_page_intent(loser['page_clean'], query)
-            overlap = (loser['impressions'] / winner['impressions']) if winner['impressions'] > 0 else 0
-            traffic_loss = int(loser['impressions'] * winner['ctr'])
+            l_mkt = detect_market(loser['page_clean'], query)
+            l_int = get_page_intent(loser['page_clean'], query)
             
-            row_data = {
+            overlap = (loser['impressions']/winner['impressions']) if winner['impressions'] > 0 else 0
+            loss = int(loser['impressions'] * winner['ctr'])
+            
+            row_dat = {
                 'Query': query,
-                'Winner_Page': winner['page_clean'],
-                'Winner_Pos': round(winner['position'], 1),
-                'Winner_Intent': w_intent,
-                'Loser_Page': loser['page_clean'],
-                'Loser_Pos': round(loser['position'], 1),
-                'Loser_Intent': l_intent,
-                'Loser_Imps': loser['impressions'],
-                'Overlap_Score': overlap,
-                'Traffic_Loss': traffic_loss
+                'Winner_Page': winner['page_clean'], 'Winner_Pos': round(winner['position'],1),
+                'Winner_Market': w_mkt, 'Winner_Intent': w_int,
+                'Loser_Page': loser['page_clean'], 'Loser_Pos': round(loser['position'],1),
+                'Loser_Market': l_mkt, 'Loser_Intent': l_int,
+                'Overlap_Score': overlap, 'Traffic_Loss': loss
             }
             
-            status, icon, action = classify_cannibalization(row_data, brands)
+            status, icon, action = classify_issue(row_dat, brands)
             
-            check_live = False
-            # Check live only if it's an actionable issue
-            if "Critical" in status or "Intent" in status or "Moderate" in status:
-                check_live = True
-                pages_to_check.append(loser['page_clean'])
+            # Queue for live check if issue is actionable
+            needs_check = "Critical" in status or "Intent" in status or "Market" in status
+            if needs_check: check_queue.append(loser['page_clean'])
             
-            row_data.update({
-                'Status': status, 'Icon': icon, 'Action': action, 
-                'Priority': traffic_loss, 'Check_Live': check_live
-            })
-            results.append(row_data)
+            row_dat.update({'Status': status, 'Icon': icon, 'Action': action, 'Check_Live': needs_check})
+            results.append(row_dat)
 
-    # 3. Parallel Live Validation
-    unique_pages = list(set(pages_to_check))
+    # Parallel Live Check
+    unique_urls = list(set(check_queue))
     status_map = {}
-    
-    if unique_pages:
-        status_text = st.empty()
-        status_text.info(f"🕵️ جاري فحص {len(unique_pages)} صفحة (Live Check)...")
-        
-        with ThreadPoolExecutor(max_workers=10) as executor:
-            future_to_url = {executor.submit(get_live_status, url): url for url in unique_pages}
-            for future in future_to_url:
+    if unique_urls:
+        st.toast(f"🕵️ Checking {len(unique_urls)} URLs for Redirects...", icon="⚡")
+        with ThreadPoolExecutor(max_workers=12) as ex:
+            future_map = {ex.submit(get_live_status, u): u for u in unique_urls}
+            for fut in future_map:
                 try:
-                    url = future_to_url[future]
-                    code, redirected, final_url = future.result()
-                    status_map[url] = {'code': code, 'redirected': redirected}
+                    u = future_map[fut]
+                    code, is_red, final = fut.result()
+                    status_map[u] = {'code': code, 'redirected': is_red}
                 except:
-                    status_map[url] = {'code': 0, 'redirected': False}
-        
-        status_text.empty()
+                    status_map[u] = {'code': 0, 'redirected': False}
 
-    # 4. Final Filter
-    final_results = []
-    for row in results:
-        url = row['Loser_Page']
-        if row['Check_Live'] and url in status_map:
-            live_data = status_map[url]
-            code = str(live_data['code'])
-            
-            if live_data['redirected'] or code.startswith('3'):
-                row['Status'] = "Resolved (Redirected)"
-                row['Icon'] = "✅"
-                row['Action'] = "None (Fixed)"
-                row['Priority'] = -1 
-            elif code in ['404', '410']:
-                 row['Status'] = "Resolved (Page Gone)"
-                 row['Icon'] = "🗑️"
-                 row['Action'] = "None"
-                 row['Priority'] = -1
+    # Final Filter
+    final_res = []
+    for r in results:
+        u = r['Loser_Page']
+        if r['Check_Live'] and u in status_map:
+            d = status_map[u]
+            if d['redirected'] or str(d['code']).startswith('3'):
+                r['Status'] = "Resolved (Redirected)"
+                r['Icon'] = "✅"
+                r['Action'] = "Fixed"
+                r['Traffic_Loss'] = 0 # No real loss if redirected
+            elif str(d['code']) in ['404', '410']:
+                r['Status'] = "Resolved (Gone)"
+                r['Icon'] = "🗑️"
+                r['Action'] = "None"
+                r['Traffic_Loss'] = 0
+        final_res.append(r)
         
-        final_results.append(row)
-            
-    return pd.DataFrame(final_results).sort_values('Priority', ascending=False)
+    return pd.DataFrame(final_res).sort_values('Traffic_Loss', ascending=False)
 
 # ==========================================
-# 🔌 5. GSC CONNECTIVITY (FIXED DATES)
+# 🔌 6. GSC AUTH & FETCH (FIXED DATES)
 # ==========================================
 @st.cache_resource
-def authenticate_gsc(auth_code):
+def auth_gsc(code):
     try:
-        flow = InstalledAppFlow.from_client_secrets_file(
-            "client_secret.json", ['https://www.googleapis.com/auth/webmasters.readonly'])
+        flow = InstalledAppFlow.from_client_secrets_file("client_secret.json", ['https://www.googleapis.com/auth/webmasters.readonly'])
         flow.redirect_uri = "urn:ietf:wg:oauth:2.0:oob"
-        flow.fetch_token(code=auth_code)
+        flow.fetch_token(code=code)
         return build('searchconsole', 'v1', credentials=flow.credentials)
     except Exception as e: return None
 
-@st.cache_data(ttl=3600)
-def fetch_data(_service, site_url, days):
-    # --- FIX: DATA LAG & 90 DAYS LOGIC ---
-    # نرحل تاريخ النهاية 3 أيام للخلف لتجنب البيانات الناقصة
-    lag_days = 3
-    end_date = datetime.date.today() - datetime.timedelta(days=lag_days)
-    start_date = end_date - datetime.timedelta(days=days)
+def fetch_data(srv, site, days):
+    # FIXED DATE LOGIC: Display EXACT dates to user
+    lag = 3
+    end = datetime.date.today() - datetime.timedelta(days=lag)
+    start = end - datetime.timedelta(days=days)
     
-    request = {
-        'startDate': start_date.isoformat(),
-        'endDate': end_date.isoformat(),
-        'dimensions': ['query', 'page'],
-        'rowLimit': 25000 
-    }
+    st.info(f"📅 جاري تحليل البيانات للفترة من: **{start}** إلى **{end}** (مدة {days} يوم فعلي)", icon="📆")
+    
+    req = {'startDate': start.isoformat(), 'endDate': end.isoformat(), 'dimensions': ['query', 'page'], 'rowLimit': 25000}
     try:
-        response = _service.searchanalytics().query(siteUrl=site_url, body=request).execute()
-        rows = response.get('rows', [])
+        resp = srv.searchanalytics().query(siteUrl=site, body=req).execute()
+        rows = resp.get('rows', [])
         if not rows: return pd.DataFrame()
-        
-        data = []
-        for row in rows:
-            data.append({
-                'query': row['keys'][0],
-                'page': row['keys'][1],
-                'clicks': row['clicks'],
-                'impressions': row['impressions'],
-                'ctr': row['ctr'],
-                'position': row['position']
-            })
-        return pd.DataFrame(data)
+        return pd.DataFrame([{
+            'query': r['keys'][0], 'page': r['keys'][1], 
+            'clicks': r['clicks'], 'impressions': r['impressions'], 
+            'ctr': r['ctr'], 'position': r['position']
+        } for r in rows])
     except Exception as e:
-        st.error(f"Error fetching data: {e}")
-        return pd.DataFrame()
+        st.error(f"API Error: {e}"); return pd.DataFrame()
 
 # ==========================================
-# 🖥️ 6. MAIN APP
+# 🖥️ 7. APP UI
 # ==========================================
 with st.sidebar:
     st.header("⚙️ الإعدادات")
-    uploaded_file = st.file_uploader("ملف JSON (client_secret)", type="json")
+    u_file = st.file_uploader("ملف JSON", type="json")
     
     if 'creds' in st.session_state:
         st.success("✅ متصل")
-        sites = st.session_state.get('sites', [])
-        if not sites:
-            try:
-                site_list = st.session_state.creds.sites().list().execute()
-                sites = [s['siteUrl'] for s in site_list.get('siteEntry', [])]
-                st.session_state.sites = sites
-            except: pass
-        selected_site = st.selectbox("الموقع", sites)
+        if 'sites' not in st.session_state:
+            try: st.session_state.sites = [s['siteUrl'] for s in st.session_state.creds.sites().list().execute().get('siteEntry', [])]
+            except: st.session_state.sites = []
+        sel_site = st.selectbox("الموقع", st.session_state.sites) if st.session_state.sites else st.text_input("رابط الموقع")
     else:
-        selected_site = st.text_input("رابط الموقع", "https://example.com")
+        sel_site = st.text_input("رابط الموقع")
 
-    # Slider fixed to 90 Days
-    days = st.slider("فترة التحليل (أيام)", 7, 90, 28)
+    # Fixed Slider
+    days_val = st.slider("فترة التحليل (أيام)", 7, 90, 28)
     
     st.markdown("---")
-    brands_input = st.text_area("كلمات البراند", "almaster, المستر, ماستر")
-    brands = [b.strip() for b in brands_input.split(',')]
+    br_txt = st.text_area("براندات (للاستبعاد)", "almaster, المستر, ماستر")
+    brands = [b.strip() for b in br_txt.split(',')]
 
-if uploaded_file and 'creds' not in st.session_state:
-    with open("client_secret.json", "wb") as f: f.write(uploaded_file.getbuffer())
+if u_file and 'creds' not in st.session_state:
+    with open("client_secret.json", "wb") as f: f.write(u_file.getbuffer())
     flow = InstalledAppFlow.from_client_secrets_file("client_secret.json", ['https://www.googleapis.com/auth/webmasters.readonly'])
     flow.redirect_uri = "urn:ietf:wg:oauth:2.0:oob"
-    auth_url, _ = flow.authorization_url()
-    st.markdown(f"[🔗 رابط المصادقة]({auth_url})")
+    st.markdown(f"[🔗 رابط المصادقة]({flow.authorization_url()[0]})")
     code = st.text_input("كود المصادقة:")
     if code:
-        srv = authenticate_gsc(code)
-        if srv:
-            st.session_state.creds = srv
-            st.rerun()
+        srv = auth_gsc(code)
+        if srv: st.session_state.creds = srv; st.rerun()
 
-if st.button("🚀 تشغيل التحليل (Deep Scan)", type="primary"):
+if st.button("🚀 تشغيل التحليل (Geo-Aware Scan)", type="primary"):
     if 'creds' in st.session_state:
-        with st.spinner(f"جاري تحليل آخر {days} يوم..."):
-            raw_df = fetch_data(st.session_state.creds, selected_site, days)
-            if not raw_df.empty:
-                report_df = analyze_gsc_data(raw_df, brands)
-                st.session_state.report = report_df
+        with st.spinner("جاري سحب البيانات وتحليل الأسواق والروابط..."):
+            raw = fetch_data(st.session_state.creds, sel_site, days_val)
+            if not raw.empty:
+                st.session_state.rep = analyze_data(raw, brands)
             else:
-                st.error("لا توجد بيانات (تأكد من اختيار الفترة الصحيحة).")
-    else:
-        st.warning("يجب تسجيل الدخول أولاً.")
+                st.error("لا توجد بيانات متاحة لهذه الفترة.")
+    else: st.warning("يجب تسجيل الدخول.")
 
-if 'report' in st.session_state and not st.session_state.report.empty:
-    df = st.session_state.report
-    
-    actionable = df[~df['Status'].str.contains('Resolved|Dominance')]
-    critical = actionable[actionable['Status'].str.contains('Critical')]
-    dominance = df[df['Status'].str.contains('Dominance')]
-    resolved = df[df['Status'].str.contains('Resolved')]
+if 'rep' in st.session_state and not st.session_state.rep.empty:
+    df = st.session_state.rep
+    act = df[~df['Status'].str.contains('Resolved|Dominance')]
+    geo_err = act[act['Status'].str.contains('Market')]
+    crit = act[act['Status'].str.contains('Critical')]
+    res = df[df['Status'].str.contains('Resolved')]
     
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("🔴 تضارب (Action)", len(critical))
-    c2.metric("🟢 هيمنة (Good)", len(dominance))
-    c3.metric("🧹 محلول (Redirects)", len(resolved))
-    c4.metric("📉 زيارات مهددة", f"{critical['Traffic_Loss'].sum():,}")
+    c1.metric("🌍 مشاكل استهداف (Geo)", len(geo_err))
+    c2.metric("🔴 تضارب محتوى", len(crit))
+    c3.metric("🧹 تم حله (Redirects)", len(res))
+    c4.metric("📉 زيارات مهددة", f"{act['Traffic_Loss'].sum():,}")
     
     st.markdown("---")
     
-    t1, t2, t3 = st.tabs(["🚀 خطة العمل", "🛡️ الهيمنة", "📊 الداتا الكاملة"])
+    t1, t2, t3 = st.tabs(["⚠️ مشاكل الاستهداف & التضارب", "✅ تم حله / هيمنة", "📊 الداتا الكاملة"])
     
     with t1:
+        st.caption("يعرض هذا الجدول الصفحات التي تنافس بعضها (محتوى مكرر) أو صفحات تستهدف أسواق خاطئة (مثلاً صفحة عامة تنافس صفحة سعودية).")
         st.dataframe(
-            actionable[['Icon', 'Query', 'Status', 'Action', 'Winner_Page', 'Loser_Page', 'Traffic_Loss']],
+            act[['Icon', 'Query', 'Status', 'Winner_Market', 'Winner_Page', 'Loser_Market', 'Loser_Page', 'Traffic_Loss']],
             column_config={
-                "Winner_Page": st.column_config.LinkColumn("Winner"),
-                "Loser_Page": st.column_config.LinkColumn("Loser"),
-                "Traffic_Loss": st.column_config.ProgressColumn("Loss", format="%d", max_value=int(df['Traffic_Loss'].max()))
+                "Winner_Page": st.column_config.LinkColumn("الرابح"),
+                "Loser_Page": st.column_config.LinkColumn("الخاسر"),
+                "Traffic_Loss": st.column_config.ProgressColumn("خسارة متوقعة", format="%d", max_value=int(df['Traffic_Loss'].max()))
             }, use_container_width=True)
             
     with t2:
-        st.dataframe(dominance[['Query', 'Winner_Pos', 'Loser_Pos', 'Winner_Page', 'Loser_Page']], use_container_width=True)
-    
+        good = df[df['Status'].str.contains('Resolved|Dominance')]
+        st.dataframe(good[['Icon', 'Query', 'Status', 'Winner_Page', 'Loser_Page']], use_container_width=True)
+        
     with t3:
         st.dataframe(df, use_container_width=True)
 
-    output = io.BytesIO()
-    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        df.to_excel(writer, sheet_name='Full Report', index=False)
-        actionable.to_excel(writer, sheet_name='Action Plan', index=False)
-        dominance.to_excel(writer, sheet_name='Dominance', index=False)
+    out = io.BytesIO()
+    with pd.ExcelWriter(out, engine='xlsxwriter') as w:
+        df.to_excel(w, sheet_name='All Data', index=False)
+        act.to_excel(w, sheet_name='Action Plan', index=False)
+        geo_err.to_excel(w, sheet_name='Geo Conflicts', index=False)
     
-    st.download_button("📥 تحميل التقرير (Excel)", output.getvalue(), f"SEO_Audit_{datetime.date.today()}.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    st.download_button("📥 تحميل التقرير (Excel)", out.getvalue(), f"SEO_Audit_v5.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
-elif 'report' in st.session_state:
-    st.success("الموقع نظيف تماماً! 🦁")
+elif 'rep' in st.session_state:
+    st.success("الموقع سليم تماماً! 🦁")
